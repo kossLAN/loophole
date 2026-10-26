@@ -1,0 +1,29 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: lint-${{ hashFiles('flake.lock', 'Cargo.lock') }}
+          restore-keys: lint-
+
+      - name: nixfmt
+        run: nix fmt -- --ci
+      - name: rustfmt
+        run: nix develop .#lint -c cargo fmt --all --check
+      - name: clippy
+        run: nix develop .#lint -c cargo clippy --workspace --all-targets --locked -- -D warnings

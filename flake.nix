@@ -1,6 +1,5 @@
 {
-  # The patch sets in nix/qemu and nix/virglrenderer target this nixpkgs revision.
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/151fa4e8ddfdd8dd25d945ad94ed54a13de9f6e4";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs =
     {
@@ -24,6 +23,30 @@
       checks = eachSystem (w: {
         inherit (w) loophole;
       });
+
+      devShells = lib.genAttrs systems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        {
+          default = import ./shell.nix { inherit nixpkgs system; };
+
+          lint = pkgs.mkShell {
+            buildInputs = [ pkgs.fontconfig ];
+
+            env.LOOPHOLE_KEYMAPS_CSV = "${self.legacyPackages.${system}.keymaps}";
+
+            packages = with pkgs; [
+              rustc
+              cargo
+              clippy
+              rustfmt
+              pkg-config
+            ];
+          };
+        }
+      );
 
       formatter = lib.genAttrs systems (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
 
