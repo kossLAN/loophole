@@ -8,7 +8,7 @@
   loophole-unwrapped,
   qemu,
   ovmf,
-  # Unset, loophole downloads the latest build of kossLAN/loophole-guest.
+  # Unset, loophole downloads the latest build of kossLAN/loophole-guest-driver.
   driver-disc ? null,
 }:
 

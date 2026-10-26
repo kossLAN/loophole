@@ -23,7 +23,7 @@
 
 RADV builds GFX command buffers, allocates buffer objects and assigns GPU virtual addresses
 itself. Its amdgpu winsys talks through vdrm, the virtio-gpu native-context transport, which
-loophole-guest's Mesa patches route over the kernel driver's `D3DKMTEscape` (ABI in its
+loophole-guest-driver's Mesa patches route over the kernel driver's `D3DKMTEscape` (ABI in its
 `abi/viogpum.h`). virglrenderer replays those requests on the host GPU: it creates the buffer
 objects, maps them into the guest through the host-memory window, submits and signals fences.
 Commands are never translated.
@@ -32,9 +32,9 @@ Commands are never translated.
 
 `loophole_umd.dll` is the WDDM user-mode driver for Direct3D 10-12, DWM included. Triton
 (osy/virtio-win-mesa) implements the DDIs on DXVK and vkd3d-proton devices running in-process
-on RADV (loophole-guest's `umd/`). Shared and presentable resources are guest blobs the kernel
-driver can scan out, so DWM composes on the GPU. Direct3D 8/9 and OpenGL use DXVK and Zink placed next
-to a game by `loophole layers enable`.
+on RADV (loophole-guest-driver's `umd/`). Shared and presentable resources are guest blobs the
+kernel driver can scan out, so DWM composes on the GPU. Direct3D 8/9 and OpenGL use DXVK and Zink
+placed next to a game by `loophole layers enable`.
 
 ## Display
 
@@ -72,5 +72,5 @@ short-lived clients.
 
 Nix builds the app and host side from one pinned nixpkgs, which the patch sets target. The app's
 wrapper points it at the pinned QEMU, firmware and swtpm. The guest driver builds on GitHub Actions
-in [kossLAN/loophole-guest](https://github.com/kossLAN/loophole-guest), and the app downloads the
-latest release's disc unless `LOOPHOLE_DRIVER_DISC` names one.
+in [kossLAN/loophole-guest-driver](https://github.com/kossLAN/loophole-guest-driver), and the app
+downloads the latest release's disc unless `LOOPHOLE_DRIVER_DISC` names one.

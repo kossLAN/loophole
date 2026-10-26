@@ -8,8 +8,8 @@ use serde::Deserialize;
 
 use crate::dirs;
 
-// kossLAN/loophole-guest's workflow publishes every build of main as its latest release.
-const REPO: &str = "kossLAN/loophole-guest";
+// kossLAN/loophole-guest-driver's workflow publishes every build of main as its latest release.
+const REPO: &str = "kossLAN/loophole-guest-driver";
 const ASSET: &str = "loophole-guest.iso";
 const PREFIX: &str = "loophole-guest-";
 // The previous build stays for a VM that may still hold it.
