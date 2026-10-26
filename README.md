@@ -28,6 +28,15 @@ Other cards haven't been tested yet.
 
 With Nix, `nix run .` opens the app. `loophole check` tells you what your machine is missing.
 
+## Benchmarks
+
+Loophole running Unigine Superposition 1.1, 1920 × 1080, Extreme shaders and
+vsync off, on a Radeon RX 9070 XT. 
+
+| Host (106.1 FPS) | Windows Guest (99.5 FPS) |
+| --- | --- |
+| ![Superposition running on the host](resources/superposition-host.png) | ![Superposition running in the windows guest](resources/superposition-guest.png) |
+
 ## NixOS module
 
 ```nix
