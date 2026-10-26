@@ -120,12 +120,24 @@ export component CpuTab inherits CardFlow {
             icon: Icons.gauge;
             hint: "Host memory the GPU can map";
             error: Edit.issues.gpu;
-            NumberField {
-                value <=> Edit.vm.gpu-window-gib;
-                minimum: 1;
-                maximum: 64;
-                unit: "GiB";
-                enabled: !Edit.locked;
+            if Edit.options.gpu-window-sizes.length > 0: HorizontalLayout {
+                alignment: end;
+                horizontal-stretch: 1;
+                Select {
+                    model: Edit.options.gpu-window-sizes;
+                    current-index <=> Edit.vm.gpu-window;
+                    enabled: !Edit.locked;
+                    width: 120px;
+                    horizontal-stretch: 0;
+                }
+            }
+            if Edit.options.gpu-window-sizes.length == 0: Text {
+                text: "GPU VRAM not detected";
+                color: Theme.subtle;
+                font-size: Theme.font-md;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
             }
         }
     }

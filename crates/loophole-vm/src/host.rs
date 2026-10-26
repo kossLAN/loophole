@@ -10,6 +10,7 @@ use crate::config::{HugePages, PciAddress, UsbId};
 pub struct RenderNode {
     pub path: PathBuf,
     pub driver: String,
+    pub vram: Option<u64>,
     // PCI address with vendor and device id, e.g. "0000:03:00.0 [1002:7550]".
     pub description: String,
 }
@@ -106,6 +107,7 @@ fn render_nodes_in(sys: &Sys) -> Vec<RenderNode> {
                 driver: sys
                     .link_name(format!("{dev}/driver"))
                     .unwrap_or_else(|| "?".into()),
+                vram: sys.number(format!("{dev}/mem_info_vram_total")),
                 description: format!("{}{ids}", sys.link_name(&dev).unwrap_or_default()),
             }
         })

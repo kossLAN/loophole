@@ -20,7 +20,7 @@ export struct VmEdit {
     hyperv: bool,
     memory-gib: int,
     hugepages: int,
-    gpu-window-gib: int,
+    gpu-window: int,
     install: string,
     driver-disc: bool,
     sound: bool,
@@ -108,6 +108,7 @@ export struct EditIssues {
 
 export struct EditOptions {
     hugepages: [string],
+    gpu-window-sizes: [string],
     buses: [string],
     formats: [string],
     caches: [string],

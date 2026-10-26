@@ -78,8 +78,11 @@ impl VmConfig {
         if self.memory.size_gib == 0 {
             err(Section::Memory, "memory: at least 1 GiB".into());
         }
-        if !(1..=64).contains(&self.gpu.window_gib) {
-            err(Section::Gpu, "GPU memory window: 1 to 64 GiB".into());
+        if !(1..=64).contains(&self.gpu.window_gib) || !self.gpu.window_gib.is_power_of_two() {
+            err(
+                Section::Gpu,
+                "GPU memory window: a power of two from 1 to 64 GiB".into(),
+            );
         }
 
         if self.disks.len() > MAX_DISKS {

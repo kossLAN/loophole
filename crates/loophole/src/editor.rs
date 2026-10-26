@@ -84,6 +84,23 @@ fn index(i: usize) -> i32 {
     i32::try_from(i).unwrap_or(0)
 }
 
+fn gpu_window_sizes(vram: u64) -> Vec<u32> {
+    // Reported VRAM can be slightly below the card's advertised size.
+    let gib = vram.div_ceil(1 << 30).min(64);
+    let Some(max_power) = gib.checked_ilog2() else {
+        return Vec::new();
+    };
+    (0..=max_power).map(|power| 1_u32 << power).collect()
+}
+
+fn gpu_window_index(sizes: &[u32], gib: u32) -> i32 {
+    let selected = sizes
+        .iter()
+        .position(|&size| size >= gib)
+        .unwrap_or_else(|| sizes.len().saturating_sub(1));
+    index(selected)
+}
+
 fn optional(s: &str) -> Option<String> {
     let s = s.trim();
     (!s.is_empty()).then(|| s.to_owned())
@@ -163,13 +180,19 @@ where
     ))
 }
 
-fn options() -> EditOptions {
+fn options(gpu_window_sizes: &[u32]) -> EditOptions {
     EditOptions {
         hugepages: labels(HugePages::ALL, |h| match h {
             HugePages::Off => "Off",
             HugePages::Size2M => "2 MiB pages",
             HugePages::Size1G => "1 GiB pages",
         }),
+        gpu_window_sizes: ModelRc::new(VecModel::from(
+            gpu_window_sizes
+                .iter()
+                .map(|size| text(format!("{size} GiB")))
+                .collect::<Vec<_>>(),
+        )),
         buses: labels(DiskBus::ALL, |b| match b {
             DiskBus::Nvme => "NVMe",
             DiskBus::Virtio => "virtio-blk",
@@ -255,6 +278,7 @@ pub struct Editor {
     ui: slint::Weak<MainWindow>,
     pub mode: Mode,
     saved: Option<VmConfig>,
+    gpu_window_sizes: Vec<u32>,
     disks: Rc<Tracked<DiskEdit>>,
     nics: Rc<Tracked<NicEdit>>,
     pci: Rc<Tracked<PciEdit>>,
@@ -269,10 +293,15 @@ pub struct Editor {
 
 impl Editor {
     pub fn new(ui: &MainWindow, on_edit: Rc<dyn Fn()>) -> Self {
+        let nodes = host::render_nodes();
+        let gpu_window_sizes = host::gpu(&nodes)
+            .and_then(|gpu| gpu.vram)
+            .map_or_else(Vec::new, gpu_window_sizes);
         let this = Self {
             ui: ui.as_weak(),
             mode: Mode::Hidden,
             saved: None,
+            gpu_window_sizes,
             disks: Tracked::new(on_edit.clone()),
             nics: Tracked::new(on_edit.clone()),
             pci: Tracked::new(on_edit.clone()),
@@ -290,7 +319,7 @@ impl Editor {
         edit.set_pci(this.pci.model());
         edit.set_usb(ModelRc::from(this.usb.clone()));
         edit.set_boot(this.boot.model());
-        edit.set_options(options());
+        edit.set_options(options(&this.gpu_window_sizes));
         edit.set_tab_issues(ModelRc::new(VecModel::from(vec![0; TABS])));
         edit.set_host_cpus(text(format!("Available: {} threads", host::cpu_count())));
         edit.set_host_memory(text(format!("Available: {}", gib(host::memory_total()))));
@@ -386,7 +415,7 @@ impl Editor {
             hyperv: cfg.cpu.hyperv,
             memory_gib: int(cfg.memory.size_gib),
             hugepages: index(cfg.memory.hugepages.index()),
-            gpu_window_gib: int(cfg.gpu.window_gib),
+            gpu_window: gpu_window_index(&self.gpu_window_sizes, cfg.gpu.window_gib),
             install: cfg
                 .media
                 .install
@@ -874,7 +903,9 @@ impl Editor {
         cfg.cpu.hyperv = vm.hyperv;
         cfg.memory.size_gib = count(vm.memory_gib);
         cfg.memory.hugepages = HugePages::from_index(count(vm.hugepages) as usize);
-        cfg.gpu.window_gib = count(vm.gpu_window_gib);
+        if let Some(&size) = self.gpu_window_sizes.get(count(vm.gpu_window) as usize) {
+            cfg.gpu.window_gib = size;
+        }
         cfg.media.install = optional(&vm.install).map(PathBuf::from);
         cfg.media.driver_disc = vm.driver_disc;
         cfg.sound.enabled = vm.sound;
