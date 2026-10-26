@@ -1,0 +1,126 @@
+import { Theme } from "theme.slint";
+import { Icons } from "icons.slint";
+import { HostDevices } from "state.slint";
+import { Button, ButtonKind, Icon, Modal, Notice, ScrollArea, Tone } from "components/index.slint";
+
+component PickRow inherits Rectangle {
+    in property <image> icon;
+    in property <string> title;
+    in property <string> detail;
+    in property <string> problem;
+    callback picked();
+    height: Theme.row-h + 8px;
+    border-radius: Theme.radius-md;
+    background: touch.has-hover && root.problem == "" ? Theme.light : transparent;
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 12px;
+        VerticalLayout {
+            alignment: center;
+            Icon {
+                source: root.icon;
+                size: 18px;
+                color: root.problem == "" ? Theme.fg : Theme.subtle;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            Text {
+                text: root.title;
+                color: root.problem == "" ? Theme.fg : Theme.muted;
+                font-size: Theme.font-md;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                text: root.problem != "" ? root.problem : root.detail;
+                color: root.problem != "" ? Theme.warn : Theme.muted;
+                font-size: Theme.font-sm;
+                overflow: elide;
+            }
+        }
+    }
+    touch := TouchArea {
+        enabled: root.problem == "";
+        mouse-cursor: pointer;
+        clicked => { root.picked(); }
+    }
+}
+
+export component DevicePicker inherits Modal {
+    title: HostDevices.picking == 1 ? "Host disks" : HostDevices.picking == 2 ? "PCI devices" : "USB devices";
+    icon: HostDevices.picking == 1 ? Icons.hard-drive-download : HostDevices.picking == 2 ? Icons.microchip : Icons.usb;
+    panel-width: 600px;
+    close => { HostDevices.picking = 0; }
+
+    Text {
+        text: HostDevices.picking == 1
+            ? "Raw, and not mounted on the host while the VM runs"
+            : HostDevices.picking == 2
+            ? "Leaves the host with its IOMMU group while the VM runs"
+            : "Attached at start, back to the host when the VM stops";
+        color: Theme.muted;
+        font-size: Theme.font-md;
+        wrap: word-wrap;
+    }
+    ScrollArea {
+        min-height: 120px;
+        preferred-height: 360px;
+        VerticalLayout {
+            spacing: 2px;
+            alignment: start;
+            if HostDevices.picking == 1: VerticalLayout {
+                for d in HostDevices.disks: PickRow {
+                    icon: Icons.hard-drive;
+                    title: d.title;
+                    detail: d.detail;
+                    problem: d.problem;
+                    picked => {
+                        HostDevices.add-disk(d.path);
+                        HostDevices.picking = 0;
+                    }
+                }
+            }
+            if HostDevices.picking == 2: VerticalLayout {
+                for d in HostDevices.pci: PickRow {
+                    icon: Icons.microchip;
+                    title: d.title;
+                    detail: d.detail;
+                    problem: d.problem;
+                    picked => {
+                        HostDevices.add-pci(d.address);
+                        HostDevices.picking = 0;
+                    }
+                }
+            }
+            if HostDevices.picking == 3: VerticalLayout {
+                for d in HostDevices.usb: PickRow {
+                    icon: Icons.usb;
+                    title: d.title;
+                    detail: d.id;
+                    problem: d.problem;
+                    picked => {
+                        HostDevices.add-usb(d.id);
+                        HostDevices.picking = 0;
+                    }
+                }
+            }
+        }
+    }
+    HorizontalLayout {
+        alignment: end;
+        spacing: Theme.space-2;
+        Button {
+            text: "Rescan";
+            icon: Icons.refresh-cw;
+            kind: ButtonKind.ghost;
+            clicked => { HostDevices.scan(); }
+        }
+        Button {
+            text: "Close";
+            clicked => { HostDevices.picking = 0; }
+        }
+    }
+}

@@ -1,0 +1,251 @@
+import { Theme } from "theme.slint";
+import { Icons } from "icons.slint";
+import {
+    BootEdit, DiskEdit, Edit, EditIssues, EditOptions, ForwardEdit, HostDevices, HostDiskItem,
+    HostPciItem, HostUsbItem, NicEdit, PciEdit, UsbEdit, VmEdit, VmItem,
+} from "state.slint";
+import { Button, ButtonKind, Icon, Notice, Tone } from "components/index.slint";
+import { Sidebar } from "sidebar.slint";
+import { Header } from "header.slint";
+import { VmPane } from "vm-pane.slint";
+import { Screen } from "screen.slint";
+import { DevicePicker } from "device-picker.slint";
+import { Confirm } from "confirm.slint";
+import { About } from "about.slint";
+
+export { Theme }
+
+export {
+    BootEdit, DiskEdit, Edit, EditIssues, EditOptions, ForwardEdit, HostDevices, HostDiskItem,
+    HostPciItem, HostUsbItem, NicEdit, PciEdit, UsbEdit, VmEdit, VmItem,
+}
+
+export component MainWindow inherits Window {
+    // false: the screen alone (`loophole view`)
+    in property <bool> manager: true;
+    in property <bool> fullscreen;
+    in property <[VmItem]> vms;
+    in-out property <int> selected: -1;
+    in property <bool> show-screen;
+    in-out property <bool> settings-view;
+    in-out property <bool> sidebar-open;
+    in-out property <bool> sidebar-hidden;
+    in property <string> message;
+    in property <string> host-problem;
+
+    in property <image> frame;
+    in property <image> cursor;
+    in property <bool> cursor-visible;
+    in property <length> cursor-x;
+    in property <length> cursor-y;
+    in property <length> cursor-w;
+    in property <length> cursor-h;
+    in property <string> placeholder;
+    in property <bool> stats-visible;
+    in property <string> stats;
+    in property <string> hint;
+
+    in-out property <bool> about-open;
+    in-out property <bool> confirm-open;
+    in property <string> confirm-title;
+    in property <string> confirm-text;
+    in property <string> confirm-action;
+    in property <bool> confirm-destructive: true;
+    out property <bool> modal-open: root.confirm-open || root.about-open || HostDevices.picking != 0;
+
+    callback select(int);
+    callback start();
+    callback shutdown();
+    callback force-off();
+    callback pause();
+    callback resume();
+    callback reset();
+    callback ctrl-alt-del();
+    callback toggle-fullscreen();
+    callback eject-install-media();
+    callback set-driver-disc(bool);
+    callback new-vm();
+    callback remove-vm();
+    callback confirmed();
+    callback settings-view-changed();
+    callback screen-geometry(length, length, length, length);
+
+    in property <string> window-title: "loophole";
+    title: root.window-title;
+    background: Theme.bg;
+    preferred-width: 1440px;
+    preferred-height: 900px;
+    min-width: 720px;
+    min-height: 480px;
+    default-font-size: Theme.font-md;
+
+    property <bool> chrome: root.manager && !root.fullscreen;
+    property <bool> has-header: root.chrome && (root.creating || root.current.name != "");
+    property <bool> sidebar: root.chrome && (root.show-screen ? root.sidebar-open : !root.sidebar-hidden || !root.has-header);
+    property <bool> creating: Edit.mode == 1;
+    property <VmItem> current: root.selected >= 0 && root.selected < root.vms.length ? root.vms[root.selected] : { name: "", state: "" };
+
+    changed settings-view => {
+        root.settings-view-changed();
+    }
+
+    HorizontalLayout {
+        if root.sidebar: Sidebar {
+            vms: root.vms;
+            selected: root.selected;
+            creating: root.creating;
+            select(i) => { root.select(i); }
+            new-vm => { root.new-vm(); }
+            about => { root.about-open = true; }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            if root.chrome && root.host-problem != "": Rectangle {
+                background: Theme.bg;
+                VerticalLayout {
+                    padding: Theme.space-3;
+                    Notice {
+                        title: "VMs cannot run here";
+                        text: root.host-problem;
+                        tone: Tone.danger;
+                    }
+                }
+            }
+
+            if root.has-header: Header {
+                vm: root.current;
+                creating: root.creating;
+                dirty: Edit.dirty;
+                driver-disc-available: Edit.driver-disc-available;
+                settings-view <=> root.settings-view;
+                sidebar-shown: root.sidebar;
+                toggle-sidebar => {
+                    if (root.show-screen) {
+                        root.sidebar-open = !root.sidebar-open;
+                    } else {
+                        root.sidebar-hidden = !root.sidebar-hidden;
+                    }
+                }
+                start => { root.start(); }
+                pause => { root.pause(); }
+                resume => { root.resume(); }
+                ctrl-alt-del => { root.ctrl-alt-del(); }
+                reset => { root.reset(); }
+                shutdown => { root.shutdown(); }
+                force-off => { root.force-off(); }
+                eject-install-media => { root.eject-install-media(); }
+                set-driver-disc(on) => { root.set-driver-disc(on); }
+                fullscreen => { root.toggle-fullscreen(); }
+                remove => { root.remove-vm(); }
+            }
+
+            if root.show-screen || !root.manager: Screen {
+                vertical-stretch: 1;
+                frame: root.frame;
+                cursor: root.cursor;
+                cursor-visible: root.cursor-visible;
+                cursor-x: root.cursor-x;
+                cursor-y: root.cursor-y;
+                cursor-w: root.cursor-w;
+                cursor-h: root.cursor-h;
+                placeholder: root.placeholder;
+                geometry(x, y, w, h) => { root.screen-geometry(x, y, w, h); }
+            }
+
+            if root.manager && !root.show-screen && Edit.mode != 0: VmPane {
+                vertical-stretch: 1;
+            }
+
+            if root.manager && !root.show-screen && Edit.mode == 0: Rectangle {
+                vertical-stretch: 1;
+                VerticalLayout {
+                    alignment: center;
+                    spacing: Theme.space-4;
+                    Text {
+                        text: root.vms.length == 0 ? "No VMs yet" : "Select a VM";
+                        color: Theme.fg;
+                        font-size: Theme.font-xl;
+                        font-weight: 600;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: root.vms.length == 0 ? "Create one from a Windows 11 ISO" : "Its screen or settings open here";
+                        color: Theme.muted;
+                        horizontal-alignment: center;
+                    }
+                    if root.vms.length == 0: HorizontalLayout {
+                        alignment: center;
+                        Button {
+                            text: "New VM";
+                            icon: Icons.plus;
+                            kind: ButtonKind.primary;
+                            clicked => { root.new-vm(); }
+                        }
+                    }
+                }
+            }
+
+            if root.chrome && (root.hint != "" || root.message != ""): Rectangle {
+                height: 28px;
+                background: Theme.sidebar;
+                Rectangle {
+                    y: 0px;
+                    height: 1px;
+                    background: Theme.border;
+                }
+                HorizontalLayout {
+                    padding-left: Theme.space-4;
+                    padding-right: Theme.space-4;
+                    spacing: 8px;
+                    if root.message != "": VerticalLayout {
+                        alignment: center;
+                        Icon {
+                            source: Icons.circle-alert;
+                            size: 14px;
+                            color: Theme.danger;
+                        }
+                    }
+                    Text {
+                        text: root.message != "" ? root.message : root.hint;
+                        color: root.message != "" ? Theme.danger : Theme.muted;
+                        font-size: Theme.font-sm;
+                        vertical-alignment: center;
+                        overflow: elide;
+                        horizontal-stretch: 1;
+                    }
+                }
+            }
+        }
+    }
+
+    if root.stats-visible: Rectangle {
+        x: root.sidebar ? Theme.sidebar-w + 12px : 12px;
+        y: root.chrome ? Theme.header-h + 12px : 12px;
+        width: stats-text.preferred-width + 20px;
+        height: stats-text.preferred-height + 14px;
+        background: #000000b0;
+        border-radius: Theme.radius-sm;
+        stats-text := Text {
+            text: root.stats;
+            color: Theme.fg;
+            font-family: Theme.mono;
+            font-size: Theme.font-sm;
+        }
+    }
+
+    if HostDevices.picking != 0: DevicePicker { }
+
+    if root.confirm-open: Confirm {
+        title: root.confirm-title;
+        text: root.confirm-text;
+        action: root.confirm-action;
+        destructive: root.confirm-destructive;
+        confirmed => { root.confirmed(); }
+        close => { root.confirm-open = false; }
+    }
+
+    if root.about-open: About {
+        close => { root.about-open = false; }
+    }
+}

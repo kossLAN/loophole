@@ -1,0 +1,253 @@
+import { Theme } from "../theme.slint";
+
+export enum ButtonKind { primary, secondary, ghost, danger }
+
+export enum Tone { neutral, info, ok, warn, danger }
+
+export component Icon inherits Image {
+    in property <length> size: 16px;
+    in property <color> color: Theme.fg;
+    width: root.size;
+    height: root.size;
+    colorize: root.color;
+    image-fit: contain;
+    accessible-role: none;
+}
+
+export component Hint inherits Rectangle {
+    in property <string> text;
+    background: Theme.surface;
+    border-radius: Theme.radius-sm;
+    border-width: 1px;
+    border-color: Theme.light;
+    drop-shadow-blur: 12px;
+    drop-shadow-color: #00000080;
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+        Text {
+            text: root.text;
+            color: Theme.fg;
+            font-size: Theme.font-sm;
+        }
+    }
+}
+
+export component Button inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <ButtonKind> kind: ButtonKind.secondary;
+    in property <bool> enabled: true;
+    in property <bool> compact;
+    callback clicked;
+
+    property <bool> has-icon: root.icon.width > 0;
+    property <color> tint: root.kind == ButtonKind.primary ? Theme.accent-fg
+        : root.kind == ButtonKind.danger ? Theme.danger
+        : Theme.fg;
+
+    height: root.compact ? 26px : Theme.control-h;
+    min-width: row.preferred-width + (root.compact ? 16px : 22px);
+    border-radius: Theme.radius-md;
+    opacity: root.enabled ? 1 : 0.4;
+    background: root.kind == ButtonKind.primary ? (touch.has-hover ? root.background-hover-accent : Theme.accent)
+        : root.kind == ButtonKind.danger ? (touch.has-hover ? Theme.danger-line : Theme.danger-soft)
+        : root.kind == ButtonKind.secondary ? (touch.has-hover ? Theme.raised-hover : Theme.raised)
+        : (touch.has-hover ? Theme.hover : transparent);
+    border-width: root.kind == ButtonKind.secondary ? 1px : 0px;
+    border-color: focus.has-focus ? Theme.accent : Theme.light;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { root.clicked(); }
+
+    property <color> background-hover-accent: Theme.accent.brighter(0.12);
+
+    animate background { duration: Theme.anim; }
+
+    row := HorizontalLayout {
+        alignment: center;
+        spacing: 6px;
+        if root.has-icon: VerticalLayout {
+            alignment: center;
+            Icon {
+                source: root.icon;
+                color: root.tint;
+                size: 14px;
+            }
+        }
+        if root.text != "": Text {
+            text: root.text;
+            color: root.tint;
+            font-size: Theme.font-md;
+            font-weight: root.kind == ButtonKind.primary ? 600 : 400;
+            vertical-alignment: center;
+        }
+    }
+
+    focus := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component IconButton inherits Rectangle {
+    in property <image> icon;
+    in property <string> tooltip;
+    in property <ButtonKind> kind: ButtonKind.ghost;
+    in property <bool> enabled: true;
+    in property <bool> active;
+    in property <length> size: 28px;
+    callback clicked;
+
+    width: root.size;
+    height: root.size;
+    border-radius: root.size / 2;
+    opacity: root.enabled ? 1 : 0.35;
+    background: root.active ? Theme.light
+        : touch.has-hover ? (root.kind == ButtonKind.danger ? Theme.danger-soft : Theme.hover)
+        : transparent;
+    border-width: focus.has-focus ? 1px : 0px;
+    border-color: Theme.accent;
+    accessible-role: button;
+    accessible-label: root.tooltip;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { root.clicked(); }
+
+    animate background { duration: Theme.anim; }
+
+    Icon {
+        source: root.icon;
+        size: root.size <= 20px ? 12px : 16px;
+        color: root.kind == ButtonKind.danger ? Theme.danger : Theme.fg;
+    }
+
+    focus := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+
+    if root.tooltip != "": Tooltip {
+        Hint {
+            text: root.tooltip;
+        }
+    }
+}
+
+export component StatusDot inherits Rectangle {
+    in property <string> state;
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background: root.state == "running" ? Theme.ok
+        : root.state == "paused" ? Theme.warn
+        : root.state == "starting" ? Theme.info
+        : Theme.subtle;
+}
+
+export component Badge inherits Rectangle {
+    in property <string> text;
+    in property <Tone> tone: Tone.neutral;
+    height: 18px;
+    width: max(18px, label.preferred-width + 12px);
+    border-radius: 9px;
+    background: root.tone == Tone.danger ? Theme.danger-soft
+        : root.tone == Tone.warn ? Theme.warn-soft
+        : root.tone == Tone.ok ? Theme.ok-soft
+        : root.tone == Tone.info ? Theme.info-soft
+        : Theme.hover;
+    label := Text {
+        text: root.text;
+        font-size: Theme.font-xs;
+        font-weight: 600;
+        color: root.tone == Tone.danger ? Theme.danger
+            : root.tone == Tone.warn ? Theme.warn
+            : root.tone == Tone.ok ? Theme.ok
+            : root.tone == Tone.info ? Theme.info
+            : Theme.muted;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+export component Notice inherits Rectangle {
+    in property <string> text;
+    in property <string> title;
+    in property <Tone> tone: Tone.info;
+    background: root.tone == Tone.danger ? Theme.danger-soft
+        : root.tone == Tone.warn ? Theme.warn-soft
+        : root.tone == Tone.ok ? Theme.ok-soft
+        : Theme.info-soft;
+    border-radius: Theme.radius-lg;
+    border-width: 1px;
+    border-color: root.tone == Tone.danger ? Theme.danger-line
+        : root.tone == Tone.warn ? Theme.warn-line
+        : root.tone == Tone.ok ? Theme.ok-line
+        : Theme.info-line;
+    HorizontalLayout {
+        padding: 10px;
+        padding-left: 12px;
+        spacing: 10px;
+        VerticalLayout {
+            alignment: start;
+            padding-top: 1px;
+            Icon {
+                source: root.tone == Tone.danger ? @image-url("../icons/circle-alert.svg")
+                    : root.tone == Tone.warn ? @image-url("../icons/triangle-alert.svg")
+                    : root.tone == Tone.ok ? @image-url("../icons/circle-check.svg")
+                    : @image-url("../icons/info.svg");
+                color: root.tone == Tone.danger ? Theme.danger
+                    : root.tone == Tone.warn ? Theme.warn
+                    : root.tone == Tone.ok ? Theme.ok
+                    : Theme.info;
+            }
+        }
+        VerticalLayout {
+            spacing: 2px;
+            horizontal-stretch: 1;
+            if root.title != "": Text {
+                text: root.title;
+                color: Theme.fg;
+                font-weight: 600;
+                font-size: Theme.font-md;
+                wrap: word-wrap;
+            }
+            Text {
+                text: root.text;
+                color: root.title != "" ? Theme.muted : Theme.fg;
+                font-size: Theme.font-md;
+                wrap: word-wrap;
+            }
+        }
+    }
+}

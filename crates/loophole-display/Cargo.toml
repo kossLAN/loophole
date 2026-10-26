@@ -1,0 +1,16 @@
+[package]
+name = "loophole-display"
+version = "0.1.0"
+edition = "2024"
+description = "A client of QEMU's peer-to-peer D-Bus display: frames, cursor, input"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+async-channel = "2"
+rustix = { version = "1", features = ["fs"] }
+serde_bytes = "0.11"
+zbus = { version = "5", features = ["p2p", "serde_bytes"] }
+
+[lints]
+workspace = true

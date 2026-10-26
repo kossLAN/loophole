@@ -1,0 +1,17 @@
+[package]
+name = "loophole-vm"
+version = "0.1.0"
+edition = "2024"
+description = "loophole's VMs: definitions, QEMU and swtpm processes, QMP"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+rustix = { version = "1", features = ["fs", "net", "process", "rand"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.9"
+ureq = { version = "3", default-features = false, features = ["json", "rustls"] }
+
+[lints]
+workspace = true

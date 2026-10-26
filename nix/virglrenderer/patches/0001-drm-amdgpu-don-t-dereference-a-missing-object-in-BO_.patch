@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: kossLAN <kosslan@kosslan.dev>
+Date: Sat, 24 Oct 2026 20:13:43 -0400
+Subject: [PATCH 1/2] drm/amdgpu: don't dereference a missing object in
+ BO_VA_OP
+
+When the guest names a res_id the context does not know, the error
+message read the res_id from the NULL object instead of the request,
+which crashed the VMM.  Report the request's res_id and fail the
+command with -EINVAL.
+
+Applies on top of nixpkgs' 1001-virglrenderer-amdgpu-Use-inttypes-
+format-defines.patch.
+
+Signed-off-by: kossLAN <kosslan@kosslan.dev>
+---
+ src/drm/amdgpu/amdgpu_renderer.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/drm/amdgpu/amdgpu_renderer.c b/src/drm/amdgpu/amdgpu_renderer.c
+index 80baf96..8df61b8 100644
+--- a/src/drm/amdgpu/amdgpu_renderer.c
++++ b/src/drm/amdgpu/amdgpu_renderer.c
+@@ -593,11 +593,12 @@ amdgpu_ccmd_bo_va_op(struct drm_context *dctx, struct vdrm_ccmd_req *hdr)
+    } else {
+       obj = amdgpu_get_object_from_res_id(ctx, req->res_id, __FUNCTION__);
+       if (!obj) {
++         rsp->ret = -EINVAL;
+          print(0,
+             "amdgpu_bo_va_op_raw failed: "
+                "op: %d res_id: %d offset: 0x%" PRIx64 " "
+                "size: 0x%" PRIx64 " va: %" PRIx64 " r=%d",
+-            req->op, obj->base.res_id, req->offset, req->vm_map_size, req->va, rsp->ret);
++            req->op, req->res_id, req->offset, req->vm_map_size, req->va, rsp->ret);
+ 
+          /* This is ok. This means the guest closed the GEM already. */
+          return -EINVAL;
+-- 
+2.56.0
+

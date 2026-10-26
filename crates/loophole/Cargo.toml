@@ -1,0 +1,32 @@
+[package]
+name = "loophole"
+version = "0.1.0"
+edition = "2024"
+description = "Runs Windows VMs on the host's AMD GPU and shows them"
+# Slint is used under its royalty-free license (LicenseRef-Slint-Royalty-free-2.0), attributed
+# in the About dialog.
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+ashpd = { version = "0.13", default-features = false, features = ["async-io", "file_chooser", "settings"] }
+async-channel = "2"
+clap = { version = "4", features = ["derive"] }
+glow = "0.17"
+khronos-egl = { version = "6", features = ["dynamic"] }
+slint = { version = "1.18", default-features = false, features = [
+    "std",
+    "compat-1-2",
+    "accessibility",
+    "backend-winit",
+    "renderer-femtovg",
+    "unstable-winit-030",
+] }
+loophole-display = { path = "../loophole-display" }
+loophole-vm = { path = "../loophole-vm" }
+
+[build-dependencies]
+slint-build = "1.18"
+
+[lints]
+workspace = true

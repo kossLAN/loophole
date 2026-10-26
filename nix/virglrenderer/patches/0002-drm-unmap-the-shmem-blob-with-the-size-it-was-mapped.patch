@@ -1,0 +1,74 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: kossLAN <kosslan@kosslan.dev>
+Date: Sat, 24 Oct 2026 20:16:24 -0400
+Subject: [PATCH 2/2] drm: unmap the shmem blob with the size it was mapped
+ with
+
+drm_context_unmap_shmem_blob() took the length from rsp_mem_offset in
+the shmem header, which the guest can write: a guest that overwrote
+it made the VMM munmap arbitrary ranges of its own address space when
+the context was destroyed (seen as a jump into an unmapped libc).
+Keep the mapped size in the context, compute the response area from
+the host's own offset, and reject blobs smaller than that offset.
+
+Signed-off-by: kossLAN <kosslan@kosslan.dev>
+---
+ src/drm/drm_context.c | 11 +++++------
+ src/drm/drm_context.h |  2 ++
+ 2 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/src/drm/drm_context.c b/src/drm/drm_context.c
+index d76fec7..fcca061 100644
+--- a/src/drm/drm_context.c
++++ b/src/drm/drm_context.c
+@@ -52,9 +52,7 @@ drm_context_unmap_shmem_blob(struct drm_context *dctx)
+    if (!dctx->shmem)
+       return;
+ 
+-   uint32_t blob_size = dctx->rsp_mem_sz + dctx->shmem->rsp_mem_offset;
+-
+-   munmap(dctx->shmem, blob_size);
++   munmap(dctx->shmem, dctx->shmem_blob_size);
+ 
+    dctx->shmem = NULL;
+    dctx->rsp_mem = NULL;
+@@ -362,7 +360,7 @@ drm_context_get_shmem_blob(struct drm_context *dctx,
+       return -EINVAL;
+    }
+ 
+-   if ((blob_size < sizeof(*dctx->shmem)) || (blob_size > UINT32_MAX)) {
++   if ((blob_size < sizeof(*dctx->shmem)) || (blob_size < shmem_size) || (blob_size > UINT32_MAX)) {
+       drm_err("invalid blob size 0x%" PRIx64, blob_size);
+       return -EINVAL;
+    }
+@@ -390,11 +388,12 @@ drm_context_get_shmem_blob(struct drm_context *dctx,
+       return -ENOMEM;
+    }
+ 
++   dctx->shmem_blob_size = blob_size;
+    dctx->shmem->rsp_mem_offset = shmem_size;
+ 
+    uint8_t *ptr = (uint8_t *)dctx->shmem;
+-   dctx->rsp_mem = &ptr[dctx->shmem->rsp_mem_offset];
+-   dctx->rsp_mem_sz = blob_size - dctx->shmem->rsp_mem_offset;
++   dctx->rsp_mem = &ptr[shmem_size];
++   dctx->rsp_mem_sz = blob_size - shmem_size;
+ 
+    blob->u.fd = fd;
+    blob->type = VIRGL_RESOURCE_FD_SHM;
+diff --git a/src/drm/drm_context.h b/src/drm/drm_context.h
+index 3c04b76..1207fd5 100644
+--- a/src/drm/drm_context.h
++++ b/src/drm/drm_context.h
+@@ -41,6 +41,8 @@ struct drm_context {
+    struct virgl_context base;
+ 
+    struct vdrm_shmem *shmem;
++   /* Size of the shmem mapping, in bytes. */
++   uint32_t shmem_blob_size;
+    uint8_t *rsp_mem;
+    uint32_t rsp_mem_sz;
+ 
+-- 
+2.56.0
+

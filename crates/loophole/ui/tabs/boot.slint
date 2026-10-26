@@ -1,0 +1,116 @@
+import { Theme } from "../theme.slint";
+import { Icons } from "../icons.slint";
+import { Edit } from "../state.slint";
+import { CardFlow, Card, Checkbox, FormRow, IconButton, Icon, NumberField, Switch } from "../components/index.slint";
+
+export component BootTab inherits CardFlow {
+    Card {
+        title: "Boot order";
+        subtitle: "top first";
+        if Edit.issues.boot != "": Text {
+            text: Edit.issues.boot;
+            color: Theme.danger;
+            font-size: Theme.font-sm;
+            wrap: word-wrap;
+        }
+        for entry[i] in Edit.boot: Rectangle {
+            height: Theme.row-h;
+            border-radius: Theme.radius-md;
+            background: boot-touch.has-hover ? Theme.hover : transparent;
+            boot-touch := TouchArea { }
+            HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 4px;
+                spacing: 10px;
+                VerticalLayout {
+                    alignment: center;
+                    width: 16px;
+                    Checkbox {
+                        checked <=> entry.enabled;
+                        enabled: !Edit.locked;
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    width: 16px;
+                    Icon {
+                        source: entry.kind == 0 ? Icons.hard-drive : entry.kind == 1 ? Icons.disc-3 : Icons.microchip;
+                        color: entry.enabled ? Theme.fg : Theme.subtle;
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 1;
+                    preferred-width: 0px;
+                    Text {
+                        text: entry.label;
+                        color: entry.enabled ? Theme.fg : Theme.muted;
+                        font-size: Theme.font-md;
+                        overflow: elide;
+                    }
+                    if entry.detail != "": Text {
+                        text: entry.detail;
+                        color: Theme.muted;
+                        font-size: Theme.font-md;
+                        overflow: elide;
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    IconButton {
+                        icon: Icons.arrow-up;
+                        tooltip: "Earlier";
+                        size: 28px;
+                        enabled: !Edit.locked && i > 0;
+                        clicked => { Edit.move-boot(i, -1); }
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    IconButton {
+                        icon: Icons.arrow-down;
+                        tooltip: "Later";
+                        size: 28px;
+                        enabled: !Edit.locked && i < Edit.boot.length - 1;
+                        clicked => { Edit.move-boot(i, 1); }
+                    }
+                }
+            }
+        }
+    }
+    Card {
+        title: "Firmware";
+        FormRow {
+            label: "Boot menu";
+            icon: Icons.list-ordered;
+            hint: "Esc at the logo";
+            Switch {
+                checked <=> Edit.vm.boot-menu;
+                enabled: !Edit.locked;
+                label: "Boot menu";
+            }
+        }
+        if Edit.vm.boot-menu: FormRow {
+            label: "Logo shown for";
+            icon: Icons.info;
+            NumberField {
+                value <=> Edit.vm.boot-timeout;
+                minimum: 0;
+                maximum: 30000;
+                step: 500;
+                unit: "ms";
+                enabled: !Edit.locked;
+            }
+        }
+        FormRow {
+            label: "TPM 2.0";
+            icon: Icons.shield-check;
+            hint: "Required by Windows 11";
+            Switch {
+                checked <=> Edit.vm.tpm;
+                enabled: !Edit.locked;
+                label: "TPM 2.0";
+            }
+        }
+    }
+}

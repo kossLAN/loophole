@@ -1,0 +1,72 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: kossLAN <kosslan@kosslan.dev>
+Date: Sun, 25 Oct 2026 04:30:37 -0400
+Subject: [PATCH 3/4] edid: put the preferred timing inside the range limits
+
+The range limits descriptor always said 50-125 Hz and 30-160 kHz.  Since
+the refresh rate became a parameter (a D-Bus client sets its monitor's),
+the preferred timing can lie outside them: at 240 Hz both its vertical
+and its line rate do, and a Windows guest, which drops the modes a
+monitor's ranges exclude, was left with none at all.
+
+Raise the maxima to the preferred timing's rates when they exceed them,
+encoding values above 255 with the EDID 1.4 offsets.
+
+Signed-off-by: kossLAN <kosslan@kosslan.dev>
+---
+ hw/display/edid-generate.c | 26 ++++++++++++++++++++------
+ 1 file changed, 20 insertions(+), 6 deletions(-)
+
+diff --git a/hw/display/edid-generate.c b/hw/display/edid-generate.c
+index 2cb819675..d2b3a236d 100644
+--- a/hw/display/edid-generate.c
++++ b/hw/display/edid-generate.c
+@@ -220,17 +220,31 @@ static void edid_desc_text(uint8_t *desc, uint8_t type,
+     desc[5 + len] = '\n';
+ }
+ 
+-static void edid_desc_ranges(uint8_t *desc)
++static void edid_desc_ranges(uint8_t *desc, const Timings *timings,
++                             uint32_t refresh_rate, uint32_t yres)
+ {
++    /* EDID 1.4 encodes maxima above 255 as 255 plus the byte. */
++    uint32_t vmax = MAX(125, DIV_ROUND_UP(refresh_rate, 1000));
++    uint32_t hmax = MAX(160, DIV_ROUND_UP((uint64_t)refresh_rate *
++                                          (yres + timings->yblank), 1000000));
++
+     edid_desc_type(desc, 0xfd);
+ 
+-    /* vertical (50 -> 125 Hz) */
++    /* vertical (50 -> 125 Hz, or the preferred timing's rate) */
+     desc[5] =  50;
+-    desc[6] = 125;
++    if (vmax > 255) {
++        desc[4] |= 0x02;
++        vmax -= 255;
++    }
++    desc[6] = MIN(vmax, 255);
+ 
+-    /* horizontal (30 -> 160 kHz) */
++    /* horizontal (30 -> 160 kHz, or the preferred timing's line rate) */
+     desc[7] =  30;
+-    desc[8] = 160;
++    if (hmax > 255) {
++        desc[4] |= 0x08;
++        hmax -= 255;
++    }
++    desc[8] = MIN(hmax, 255);
+ 
+     /* max dot clock (2550 MHz) */
+     desc[9] = 2550 / 10;
+@@ -513,7 +527,7 @@ void qemu_edid_generate(uint8_t *edid, size_t size,
+      * so dta descriptor offsets don't move any more.
+      */
+ 
+-    edid_desc_ranges(desc);
++    edid_desc_ranges(desc, &timings, refresh_rate, info->prefy);
+     desc = edid_desc_next(edid, dta, desc);
+ 
+     if (desc && info->name) {
+-- 
+2.56.0
+

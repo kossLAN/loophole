@@ -1,0 +1,191 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: kossLAN <kosslan@kosslan.dev>
+Date: Sun, 25 Oct 2026 04:30:37 -0400
+Subject: [PATCH 4/4] ui/dbus: switch to the pointing device the client's
+ motion needs
+
+A guest with a tablet and a relative mouse (a q35 machine's PS/2 mouse)
+uses whichever the guest activated last, and a D-Bus client could only
+send that device's kind of motion: RelMotion failed while the tablet was
+active, so a client could not give a game that reads relative motion
+what it needs, short of removing the tablet for good.
+
+SetAbsPosition and RelMotion now make a device that takes their kind of
+motion the active one when the active one does not, as a user picking up
+the other mouse would.  The buttons follow: clicks come from the device
+that moves, and the buttons held when the device changes are released on
+the old one and pressed on the new, so that a button the client releases
+after the switch does not stay down on the old device.  The calls fail
+only when no device takes the motion.
+
+Signed-off-by: kossLAN <kosslan@kosslan.dev>
+---
+ include/ui/input.h   |  1 +
+ ui/dbus-console.c    | 42 ++++++++++++++++++++++++++++++++++++++----
+ ui/dbus-display1.xml |  8 ++++++--
+ ui/input.c           | 17 +++++++++++++++++
+ 4 files changed, 62 insertions(+), 6 deletions(-)
+
+diff --git a/include/ui/input.h b/include/ui/input.h
+index a1560cac0..088c80030 100644
+--- a/include/ui/input.h
++++ b/include/ui/input.h
+@@ -74,6 +74,7 @@ void qemu_input_update_buttons(QemuConsole *src, uint32_t *button_map,
+                                uint32_t button_old, uint32_t button_new);
+ 
+ bool qemu_input_is_absolute(const QemuConsole *con);
++bool qemu_input_activate_pointer(uint32_t mask, const QemuConsole *con);
+ int qemu_input_scale_axis(int value,
+                           int min_in, int max_in,
+                           int min_out, int max_out);
+diff --git a/ui/dbus-console.c b/ui/dbus-console.c
+index 90afba691..dc8c3cd86 100644
+--- a/ui/dbus-console.c
++++ b/ui/dbus-console.c
+@@ -54,6 +54,7 @@ struct _DBusDisplayConsole {
+     gboolean last_set;
+     guint last_x;
+     guint last_y;
++    guint buttons;
+     Notifier mouse_mode_notifier;
+     guint refresh_rate;
+ };
+@@ -405,6 +406,33 @@ dbus_kbd_qemu_leds_updated(Notifier *notifier, void *data)
+     qemu_dbus_display1_keyboard_set_modifiers(ddc->iface_kbd, leds_mask);
+ }
+ 
++static void
++dbus_mouse_queue_held(DBusDisplayConsole *ddc, bool down)
++{
++    for (int b = 0; b < INPUT_BUTTON__MAX; b++) {
++        if (ddc->buttons & (1u << b)) {
++            qemu_input_queue_btn(ddc->dcl.con, b, down);
++        }
++    }
++    qemu_input_event_sync();
++}
++
++static bool
++dbus_mouse_activate(DBusDisplayConsole *ddc, bool absolute)
++{
++    bool ok;
++
++    if (qemu_input_is_absolute(ddc->dcl.con) == absolute) {
++        return true;
++    }
++    dbus_mouse_queue_held(ddc, false);
++    ok = qemu_input_activate_pointer(absolute ? INPUT_EVENT_MASK_ABS
++                                              : INPUT_EVENT_MASK_REL,
++                                     ddc->dcl.con);
++    dbus_mouse_queue_held(ddc, true);
++    return ok;
++}
++
+ static gboolean
+ dbus_mouse_rel_motion(DBusDisplayConsole *ddc,
+                       GDBusMethodInvocation *invocation,
+@@ -412,11 +440,11 @@ dbus_mouse_rel_motion(DBusDisplayConsole *ddc,
+ {
+     trace_dbus_mouse_rel_motion(dx, dy);
+ 
+-    if (qemu_input_is_absolute(ddc->dcl.con)) {
++    if (!dbus_mouse_activate(ddc, false)) {
+         g_dbus_method_invocation_return_error(
+             invocation, DBUS_DISPLAY_ERROR,
+             DBUS_DISPLAY_ERROR_INVALID,
+-            "Mouse is not relative");
++            "No relative pointing device");
+         return DBUS_METHOD_INVOCATION_HANDLED;
+     }
+ 
+@@ -479,11 +507,11 @@ dbus_mouse_set_pos(DBusDisplayConsole *ddc,
+ 
+     trace_dbus_mouse_set_pos(x, y);
+ 
+-    if (!qemu_input_is_absolute(ddc->dcl.con)) {
++    if (!dbus_mouse_activate(ddc, true)) {
+         g_dbus_method_invocation_return_error(
+             invocation, DBUS_DISPLAY_ERROR,
+             DBUS_DISPLAY_ERROR_INVALID,
+-            "Mouse is not absolute");
++            "No absolute pointing device");
+         return DBUS_METHOD_INVOCATION_HANDLED;
+     }
+ 
+@@ -513,6 +541,9 @@ dbus_mouse_press(DBusDisplayConsole *ddc,
+ {
+     trace_dbus_mouse_press(button);
+ 
++    if (button < INPUT_BUTTON__MAX) {
++        ddc->buttons |= 1u << button;
++    }
+     qemu_input_queue_btn(ddc->dcl.con, button, true);
+     qemu_input_event_sync();
+ 
+@@ -528,6 +559,9 @@ dbus_mouse_release(DBusDisplayConsole *ddc,
+ {
+     trace_dbus_mouse_release(button);
+ 
++    if (button < INPUT_BUTTON__MAX) {
++        ddc->buttons &= ~(1u << button);
++    }
+     qemu_input_queue_btn(ddc->dcl.con, button, false);
+     qemu_input_event_sync();
+ 
+diff --git a/ui/dbus-display1.xml b/ui/dbus-display1.xml
+index 02055d747..25b5f0c54 100644
+--- a/ui/dbus-display1.xml
++++ b/ui/dbus-display1.xml
+@@ -257,7 +257,9 @@
+ 
+         Set the mouse pointer position.
+ 
+-        Returns an error if not :dbus:prop:`IsAbsolute`.
++        If the active pointing device is relative, an absolute one becomes
++        the active one, and the buttons held move to it. Returns an error if
++        there is none.
+     -->
+     <method name="SetAbsPosition">
+       <arg type="u" name="x" direction="in"/>
+@@ -271,7 +273,9 @@
+ 
+         Move the mouse pointer position, relative to the current position.
+ 
+-        Returns an error if :dbus:prop:`IsAbsolute`.
++        If the active pointing device is absolute, a relative one becomes
++        the active one, and the buttons held move to it. Returns an error if
++        there is none.
+     -->
+     <method name="RelMotion">
+       <arg type="i" name="dx" direction="in"/>
+diff --git a/ui/input.c b/ui/input.c
+index b82622c86..b374fb4d0 100644
+--- a/ui/input.c
++++ b/ui/input.c
+@@ -475,6 +475,23 @@ bool qemu_input_is_absolute(const QemuConsole *con)
+     return (s != NULL) && (s->handler->mask & INPUT_EVENT_MASK_ABS);
+ }
+ 
++bool qemu_input_activate_pointer(uint32_t mask, const QemuConsole *con)
++{
++    QemuInputHandlerState *s;
++
++    s = qemu_input_find_handler(INPUT_EVENT_MASK_REL | INPUT_EVENT_MASK_ABS,
++                                con);
++    if (s && (s->handler->mask & mask)) {
++        return true;
++    }
++    s = qemu_input_find_handler(mask, con);
++    if (!s) {
++        return false;
++    }
++    qemu_input_handler_activate(s);
++    return true;
++}
++
+ uint32_t qemu_input_get_leds_mask(const QemuConsole *con)
+ {
+     QemuInputHandlerState *s;
+-- 
+2.56.0
+

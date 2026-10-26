@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: kossLAN <kosslan@kosslan.dev>
+Date: Sun, 25 Oct 2026 04:30:37 -0400
+Subject: [PATCH 2/4] virtio-gpu-gl: replace no surface in the vCPU thread on
+ reset
+
+A guest resetting virtio-gpu-gl (Windows does while it boots) ran
+virtio_gpu_virgl_reset_scanout() in the vCPU thread, and its
+qemu_console_set_surface() made the new surface's GL texture there,
+where no GL context is current: the texture was 0, and a D-Bus display
+listener attached at the time aborted QEMU in dbus_scanout_texture()
+(assert(tex_id)).
+
+virtio_gpu_reset() has already replaced the surfaces in the main thread
+(virtio_gpu_reset_bh). Disabling the GL scanout stays here; the D-Bus
+display does no GL work for it.
+
+Signed-off-by: kossLAN <kosslan@kosslan.dev>
+---
+ hw/display/virtio-gpu-virgl.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/hw/display/virtio-gpu-virgl.c b/hw/display/virtio-gpu-virgl.c
+index 6e298f997..2ec7cb0b9 100644
+--- a/hw/display/virtio-gpu-virgl.c
++++ b/hw/display/virtio-gpu-virgl.c
+@@ -1402,8 +1402,8 @@ void virtio_gpu_virgl_reset_scanout(VirtIOGPU *g)
+ {
+     int i;
+ 
++    /* Called in a vCPU thread, where no GL context is current. */
+     for (i = 0; i < g->parent_obj.conf.max_outputs; i++) {
+-        qemu_console_set_surface(g->parent_obj.scanout[i].con, NULL);
+         qemu_console_gl_scanout_disable(g->parent_obj.scanout[i].con);
+     }
+ }
+-- 
+2.56.0
+

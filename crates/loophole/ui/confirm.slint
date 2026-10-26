@@ -1,0 +1,33 @@
+import { Theme } from "theme.slint";
+import { Icons } from "icons.slint";
+import { Button, ButtonKind, Modal } from "components/index.slint";
+
+export component Confirm inherits Modal {
+    in property <string> text;
+    in property <string> action;
+    in property <bool> destructive: true;
+    callback confirmed();
+
+    icon: root.destructive ? Icons.triangle-alert : Icons.info;
+
+    Text {
+        text: root.text;
+        wrap: word-wrap;
+        color: Theme.muted;
+        font-size: Theme.font-md;
+    }
+    HorizontalLayout {
+        alignment: end;
+        spacing: Theme.space-2;
+        Button {
+            text: "Cancel";
+            kind: ButtonKind.ghost;
+            clicked => { root.close(); }
+        }
+        Button {
+            text: root.action;
+            kind: root.destructive ? ButtonKind.danger : ButtonKind.primary;
+            clicked => { root.confirmed(); }
+        }
+    }
+}

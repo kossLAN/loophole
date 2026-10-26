@@ -1,0 +1,105 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: kossLAN <kosslan@kosslan.dev>
+Date: Sun, 25 Oct 2026 04:30:37 -0400
+Subject: [PATCH 1/4] ui/dbus: let clients set the refresh rate
+
+The GTK display sends updates at its monitor's refresh rate and tells the
+guest that rate; a D-Bus client could do neither, so a guest's 2D desktop
+reached the client at the default 30 ms interval, 33 frames a second.
+
+SetRefreshRate on a console sets the update interval of the console's
+listener (the GUI timer runs at the shortest interval of all listeners)
+and the refresh rate in its UI info, which virtio-gpu puts in the EDID.
+
+Signed-off-by: kossLAN <kosslan@kosslan.dev>
+---
+ ui/dbus-console.c    | 27 +++++++++++++++++++++++++++
+ ui/dbus-display1.xml | 13 +++++++++++++
+ 2 files changed, 40 insertions(+)
+
+diff --git a/ui/dbus-console.c b/ui/dbus-console.c
+index e1ac06814..90afba691 100644
+--- a/ui/dbus-console.c
++++ b/ui/dbus-console.c
+@@ -55,6 +55,7 @@ struct _DBusDisplayConsole {
+     guint last_x;
+     guint last_y;
+     Notifier mouse_mode_notifier;
++    guint refresh_rate;
+ };
+ 
+ G_DEFINE_TYPE(DBusDisplayConsole,
+@@ -202,6 +203,7 @@ dbus_console_set_ui_info(DBusDisplayConsole *ddc,
+         .yoff = arg_yoff,
+         .width = arg_width,
+         .height = arg_height,
++        .refresh_rate = ddc->refresh_rate,
+     };
+ 
+     if (!qemu_console_ui_info_supported(ddc->dcl.con)) {
+@@ -217,6 +219,29 @@ dbus_console_set_ui_info(DBusDisplayConsole *ddc,
+     return DBUS_METHOD_INVOCATION_HANDLED;
+ }
+ 
++static gboolean
++dbus_console_set_refresh_rate(DBusDisplayConsole *ddc,
++                              GDBusMethodInvocation *invocation,
++                              guint arg_refresh_rate)
++{
++    QemuUIInfo info;
++
++    ddc->refresh_rate = arg_refresh_rate;
++    qemu_console_listener_set_refresh(&ddc->dcl, arg_refresh_rate ?
++        MIN(1000 * 1000 / arg_refresh_rate, GUI_REFRESH_INTERVAL_DEFAULT) : 0);
++
++    if (qemu_console_ui_info_supported(ddc->dcl.con)) {
++        info = *qemu_console_get_ui_info(ddc->dcl.con);
++        if (info.width && info.height) {
++            info.refresh_rate = arg_refresh_rate;
++            qemu_console_set_ui_info(ddc->dcl.con, &info, false);
++        }
++    }
++
++    qemu_dbus_display1_console_complete_set_refresh_rate(ddc->iface, invocation);
++    return DBUS_METHOD_INVOCATION_HANDLED;
++}
++
+ #ifdef G_OS_WIN32
+ bool
+ dbus_win32_import_socket(GDBusMethodInvocation *invocation,
+@@ -582,6 +607,8 @@ dbus_display_console_new(DBusDisplay *display, QemuConsole *con)
+         dbus_console_register_listener, ddc,
+         "swapped-signal::handle-set-uiinfo",
+         dbus_console_set_ui_info, ddc,
++        "swapped-signal::handle-set-refresh-rate",
++        dbus_console_set_refresh_rate, ddc,
+         NULL);
+     g_dbus_object_skeleton_add_interface(G_DBUS_OBJECT_SKELETON(ddc),
+         G_DBUS_INTERFACE_SKELETON(ddc->iface));
+diff --git a/ui/dbus-display1.xml b/ui/dbus-display1.xml
+index d96bae2ed..02055d747 100644
+--- a/ui/dbus-display1.xml
++++ b/ui/dbus-display1.xml
+@@ -100,6 +100,19 @@
+       <arg name="height" type="u" direction="in"/>
+     </method>
+ 
++    <!--
++        SetRefreshRate:
++        @refresh_rate: the refresh rate of the client's monitor, in mHz, or
++          0 for the default.
++
++        Updates of this console are sent at this rate (but at least every
++        30 ms), and guest devices that describe a monitor to the guest give
++        it this refresh rate.
++    -->
++    <method name="SetRefreshRate">
++      <arg name="refresh_rate" type="u" direction="in"/>
++    </method>
++
+     <!--
+         Label:
+ 
+-- 
+2.56.0
+

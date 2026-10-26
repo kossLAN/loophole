@@ -1,0 +1,66 @@
+// `dark` follows the desktop's preference.
+export global Theme {
+    in-out property <bool> dark: true;
+
+    out property <color> bg: root.dark ? #161616 : #f4f4f4;
+    out property <color> surface: root.dark ? #1c1c1c : #ffffff;
+    out property <color> alternate: root.dark ? #232323 : #e8e8e8;
+    out property <color> raised: root.dark ? #1e1e1e : #ffffff;
+    out property <color> fg: root.dark ? #f2f4f8 : #161616;
+    out property <color> muted: root.dark ? #96989b : #6f6f6f;
+    out property <color> accent: root.dark ? #78a9ff : #0f62fe;
+    out property <color> accent-fg: root.dark ? #161616 : #ffffff;
+    out property <color> ok: root.dark ? #25be6a : #198038;
+    out property <color> warn: root.dark ? #ff7eb6 : #d02670;
+    out property <color> danger: root.dark ? #ee5396 : #da1e28;
+    out property <color> info: root.dark ? #78a9ff : #0f62fe;
+
+    out property <color> light: root.raised.mix(root.fg, 0.86);
+    out property <color> mid: root.bg.mix(root.raised, 0.5);
+    out property <color> sidebar: root.dark ? #121212 : #eaeaea;
+    out property <color> overlay: #000000a0;
+    out property <color> hover: root.fg.with-alpha(0.08);
+    out property <color> pressed: root.fg.with-alpha(0.13);
+    out property <color> raised-hover: root.raised.mix(root.fg, 0.92);
+    out property <color> border: root.light;
+    out property <color> subtle: root.muted.mix(root.bg, 0.6);
+    out property <color> accent-strong: root.accent.mix(root.fg, 0.8);
+    out property <color> accent-soft: root.accent.with-alpha(0.15);
+    out property <color> selection: root.accent.with-alpha(0.35);
+    out property <color> warn-soft: root.warn.with-alpha(0.12);
+    out property <color> warn-line: root.warn.with-alpha(0.3);
+    out property <color> danger-soft: root.danger.with-alpha(0.14);
+    out property <color> danger-line: root.danger.with-alpha(0.3);
+    out property <color> ok-soft: root.ok.with-alpha(0.12);
+    out property <color> ok-line: root.ok.with-alpha(0.3);
+    out property <color> info-soft: root.info.with-alpha(0.12);
+    out property <color> info-line: root.info.with-alpha(0.3);
+    out property <color> log: root.fg.mix(root.muted, 0.6);
+
+    out property <length> space-1: 4px;
+    out property <length> space-2: 8px;
+    out property <length> space-3: 12px;
+    out property <length> space-4: 16px;
+    out property <length> space-5: 24px;
+    out property <length> space-6: 32px;
+
+    out property <length> radius-sm: 6px;
+    out property <length> radius-md: 8px;
+    out property <length> radius-lg: 12px;
+
+    out property <length> font-xs: 11px;
+    out property <length> font-sm: 11px;
+    out property <length> font-md: 12px;
+    out property <length> font-lg: 13px;
+    out property <length> font-xl: 17px;
+    out property <string> mono: "monospace";
+
+    out property <length> control-h: 28px;
+    out property <length> row-h: 44px;
+    out property <length> list-row-h: 38px;
+    out property <length> sidebar-w: 232px;
+    out property <length> header-h: 56px;
+    out property <length> content-w: 1440px;
+    out property <length> card-w: 420px;
+    out property <duration> anim: 150ms;
+}
