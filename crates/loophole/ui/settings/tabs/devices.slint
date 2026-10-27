@@ -1,0 +1,169 @@
+import { Theme } from "../../theme.slint";
+import { Icons } from "../../icons.slint";
+import { Edit, Picking } from "../state.slint";
+import {
+    ButtonKind, Card, FormRow, ListEmpty, ListGap, ListPane, ListRow, Switch,
+} from "../../components/index.slint";
+
+export component DevicesTab inherits HorizontalLayout {
+    // 0: a PCI device, 1: a USB device, 2: sound
+    property <int> kind;
+    property <int> index;
+    property <int> pci-count: Edit.pci.length;
+    property <int> usb-count: Edit.usb.length;
+    property <int> pci-seen;
+    property <int> usb-seen;
+
+    function first() {
+        root.index = 0;
+        root.kind = root.pci-count > 0 ? 0 : root.usb-count > 0 ? 1 : 2;
+    }
+
+    init => {
+        root.pci-seen = root.pci-count;
+        root.usb-seen = root.usb-count;
+        root.first();
+    }
+    changed pci-count => {
+        if (root.pci-count > root.pci-seen) {
+            root.kind = 0;
+            root.index = root.pci-count - 1;
+        } else if (root.kind == 0 && root.index >= root.pci-count) {
+            root.first();
+        }
+        root.pci-seen = root.pci-count;
+    }
+    changed usb-count => {
+        if (root.usb-count > root.usb-seen) {
+            root.kind = 1;
+            root.index = root.usb-count - 1;
+        } else if (root.kind == 1 && root.index >= root.usb-count) {
+            root.first();
+        }
+        root.usb-seen = root.usb-count;
+    }
+
+    spacing: Theme.space-4;
+
+    ListPane {
+        title: "Devices";
+        add-items: [
+            { text: "PCI device", icon: Icons.microchip, enabled: true },
+            { text: "USB device", icon: Icons.usb, enabled: true },
+        ];
+        add-enabled: !Edit.locked;
+        add(k) => { Edit.pick-device(k == 0 ? Picking.pci : Picking.usb); }
+        if Edit.pci.length == 0: ListEmpty {
+            text: "No PCI devices";
+        }
+        for dev[i] in Edit.pci: ListRow {
+            icon: Icons.microchip;
+            title: dev.name;
+            subtitle: dev.address;
+            problem: !dev.ready;
+            selected: root.kind == 0 && root.index == i;
+            clicked => {
+                root.kind = 0;
+                root.index = i;
+            }
+        }
+        ListGap { }
+        if Edit.usb.length == 0: ListEmpty {
+            text: "No USB devices";
+        }
+        for dev[i] in Edit.usb: ListRow {
+            icon: Icons.usb;
+            title: dev.name;
+            subtitle: dev.id;
+            problem: dev.status != "";
+            selected: root.kind == 1 && root.index == i;
+            clicked => {
+                root.kind = 1;
+                root.index = i;
+            }
+        }
+        ListGap { }
+        ListRow {
+            icon: Icons.volume-2;
+            title: "Sound";
+            subtitle: !Edit.vm.sound ? "Off" : Edit.vm.microphone ? "Speakers and microphone" : "Speakers";
+            selected: root.kind == 2;
+            clicked => { root.kind = 2; }
+        }
+    }
+
+    VerticalLayout {
+        horizontal-stretch: 1;
+        VerticalLayout {
+            for dev[i] in Edit.pci: VerticalLayout {
+                if root.kind == 0 && root.index == i: Card {
+                    title: "PCI device";
+                    subtitle: dev.address;
+                    action-icon: Icons.trash-2;
+                    action-enabled: !Edit.locked;
+                    action-tooltip: "Remove";
+                    action-kind: ButtonKind.danger;
+                    action => { Edit.remove-pci(i); }
+                    FormRow {
+                        label: dev.name;
+                        icon: Icons.microchip;
+                        hint: "Leaves the host with its IOMMU group while the VM runs";
+                        warning: dev.ready ? "" : dev.status;
+                    }
+                    FormRow {
+                        label: "Option ROM";
+                        icon: Icons.microchip;
+                        hint: "The device's own boot firmware";
+                        Switch {
+                            checked <=> dev.rom-bar;
+                            enabled: !Edit.locked;
+                            label: "Option ROM";
+                        }
+                    }
+                }
+            }
+        }
+        VerticalLayout {
+            for dev[i] in Edit.usb: VerticalLayout {
+                if root.kind == 1 && root.index == i: Card {
+                    title: "USB device";
+                    subtitle: dev.id;
+                    action-icon: Icons.trash-2;
+                    action-enabled: !Edit.locked;
+                    action-tooltip: "Remove";
+                    action-kind: ButtonKind.danger;
+                    action => { Edit.remove-usb(i); }
+                    FormRow {
+                        label: dev.name;
+                        icon: Icons.usb;
+                        hint: "Attached at start, back to the host when the VM stops";
+                        warning: dev.status;
+                    }
+                }
+            }
+        }
+        if root.kind == 2: Card {
+            title: "Sound";
+            FormRow {
+                label: "Sound card";
+                icon: Icons.volume-2;
+                hint: "HD Audio through PipeWire";
+                Switch {
+                    checked <=> Edit.vm.sound;
+                    enabled: !Edit.locked;
+                    label: "Sound card";
+                }
+            }
+            FormRow {
+                label: "Microphone";
+                icon: Icons.mic;
+                hint: "Host default input";
+                Switch {
+                    checked <=> Edit.vm.microphone;
+                    enabled: !Edit.locked && Edit.vm.sound;
+                    label: "Microphone";
+                }
+            }
+        }
+    }
+}

@@ -30,5 +30,6 @@ pub fn runtime_dir(name: &str) -> PathBuf {
         Some(v) if !v.is_empty() => PathBuf::from(v),
         _ => std::env::temp_dir().join(format!("loophole-{}", rustix::process::getuid().as_raw())),
     };
+
     base.join("loophole").join(name)
 }

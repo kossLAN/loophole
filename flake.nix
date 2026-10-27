@@ -35,8 +35,6 @@
           lint = pkgs.mkShell {
             buildInputs = [ pkgs.fontconfig ];
 
-            env.LOOPHOLE_KEYMAPS_CSV = "${self.legacyPackages.${system}.keymaps}";
-
             packages = with pkgs; [
               rustc
               cargo

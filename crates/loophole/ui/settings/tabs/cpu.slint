@@ -1,0 +1,144 @@
+import { Theme } from "../../theme.slint";
+import { Icons } from "../../icons.slint";
+import { Edit } from "../state.slint";
+import { CardFlow, Card, FormRow, NumberField, Select, Switch } from "../../components/index.slint";
+
+export component CpuTab inherits CardFlow {
+    Card {
+        title: "Processor";
+        subtitle: "host model";
+        FormRow {
+            label: "vCPUs";
+            icon: Icons.cpu;
+            hint: Edit.host-cpus;
+            error: Edit.issues.cpu;
+            if !Edit.vm.manual-topology: NumberField {
+                value <=> Edit.vm.cores;
+                minimum: 1;
+                maximum: 256;
+                enabled: !Edit.locked;
+            }
+            if Edit.vm.manual-topology: Text {
+                text: Edit.vm.sockets * Edit.vm.cores * Edit.vm.threads;
+                color: Theme.fg;
+                font-size: Theme.font-md;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+        }
+        FormRow {
+            label: "Manual topology";
+            icon: Icons.sliders-horizontal;
+            hint: "Sockets, cores and threads";
+            Switch {
+                checked <=> Edit.vm.manual-topology;
+                enabled: !Edit.locked;
+                label: "Manual topology";
+                toggled(on) => {
+                    if (!on) {
+                        Edit.vm.cores = Edit.vm.sockets * Edit.vm.cores * Edit.vm.threads;
+                        Edit.vm.sockets = 1;
+                        Edit.vm.threads = 1;
+                    }
+                }
+            }
+        }
+        if Edit.vm.manual-topology: FormRow {
+            label: "Sockets";
+            icon: Icons.cpu;
+            hint: "Up to 2 for Windows client editions";
+            NumberField {
+                value <=> Edit.vm.sockets;
+                minimum: 1;
+                maximum: 2;
+                enabled: !Edit.locked;
+            }
+        }
+        if Edit.vm.manual-topology: FormRow {
+            label: "Cores per socket";
+            icon: Icons.cpu;
+            NumberField {
+                value <=> Edit.vm.cores;
+                minimum: 1;
+                maximum: 256;
+                enabled: !Edit.locked;
+            }
+        }
+        if Edit.vm.manual-topology: FormRow {
+            label: "Threads per core";
+            icon: Icons.cpu;
+            hint: "2 for SMT";
+            NumberField {
+                value <=> Edit.vm.threads;
+                minimum: 1;
+                maximum: 2;
+                enabled: !Edit.locked;
+            }
+        }
+        FormRow {
+            label: "Hyper-V enlightenments";
+            icon: Icons.sliders-horizontal;
+            hint: "Paravirtual timers and interrupts";
+            Switch {
+                checked <=> Edit.vm.hyperv;
+                enabled: !Edit.locked;
+                label: "Hyper-V enlightenments";
+            }
+        }
+    }
+    Card {
+        title: "Memory";
+        FormRow {
+            label: "Size";
+            icon: Icons.memory-stick;
+            hint: Edit.host-memory;
+            error: Edit.issues.memory;
+            NumberField {
+                value <=> Edit.vm.memory-gib;
+                minimum: 1;
+                maximum: 4096;
+                unit: "GiB";
+                enabled: !Edit.locked;
+            }
+        }
+        if Edit.hugepages-available || Edit.vm.hugepages != 0: FormRow {
+            label: "Huge pages";
+            icon: Icons.memory-stick;
+            hint: Edit.host-hugepages[Edit.vm.hugepages];
+            Select {
+                model: Edit.options.hugepages;
+                current-index <=> Edit.vm.hugepages;
+                enabled: !Edit.locked;
+            }
+        }
+    }
+    Card {
+        title: "Graphics";
+        FormRow {
+            label: "GPU memory window";
+            icon: Icons.gauge;
+            hint: "Host memory the GPU can map";
+            error: Edit.issues.gpu;
+            if Edit.options.gpu-window-sizes.length > 0: HorizontalLayout {
+                alignment: end;
+                horizontal-stretch: 1;
+                Select {
+                    model: Edit.options.gpu-window-sizes;
+                    current-index <=> Edit.vm.gpu-window;
+                    enabled: !Edit.locked;
+                    width: 120px;
+                    horizontal-stretch: 0;
+                }
+            }
+            if Edit.options.gpu-window-sizes.length == 0: Text {
+                text: "GPU VRAM not detected";
+                color: Theme.subtle;
+                font-size: Theme.font-md;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+        }
+    }
+}

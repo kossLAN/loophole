@@ -1,14 +1,15 @@
 import { Theme } from "../theme.slint";
 import { Icons } from "../icons.slint";
-import { Icon, IconButton, Badge, Tone, Hint } from "base.slint";
+import { ButtonKind, Icon, IconButton, Badge, Tone, Hint } from "base.slint";
 
-// A titled group of rows: the title above, the rows on a rounded panel.
 export component Card inherits VerticalLayout {
     in property <string> title;
     in property <string> subtitle;
     in property <image> action-icon;
     in property <string> action-tooltip;
     in property <bool> action-enabled: true;
+    in property <ButtonKind> action-kind: ButtonKind.ghost;
+    in property <bool> warning;
     callback action();
 
     preferred-width: Theme.card-w;
@@ -32,7 +33,7 @@ export component Card inherits VerticalLayout {
         }
         if root.subtitle != "": Text {
             text: root.subtitle;
-            color: Theme.muted;
+            color: root.warning ? Theme.warn : Theme.muted;
             font-size: Theme.font-xs;
             vertical-alignment: center;
             overflow: elide;
@@ -41,6 +42,7 @@ export component Card inherits VerticalLayout {
             icon: root.action-icon;
             tooltip: root.action-tooltip;
             enabled: root.action-enabled;
+            kind: root.action-kind;
             size: 22px;
             clicked => { root.action(); }
         }
@@ -58,57 +60,6 @@ export component Card inherits VerticalLayout {
             @children
         }
     }
-}
-
-// A list item inside a card: icon, title over subtitle, actions on the right.
-export component ItemHeader inherits HorizontalLayout {
-    in property <string> title;
-    in property <string> subtitle;
-    in property <image> icon;
-    in property <string> error;
-    in property <bool> warning;
-    min-height: Theme.row-h;
-    padding-left: 8px;
-    padding-right: 4px;
-    spacing: 10px;
-    VerticalLayout {
-        alignment: center;
-        Icon {
-            source: root.icon;
-            color: Theme.fg;
-        }
-    }
-    VerticalLayout {
-        horizontal-stretch: 1;
-        alignment: center;
-        spacing: 1px;
-        Text {
-            text: root.title;
-            color: Theme.fg;
-            font-size: Theme.font-md;
-            font-weight: 600;
-            overflow: elide;
-        }
-        if root.subtitle != "": Text {
-            text: root.subtitle;
-            color: root.warning ? Theme.warn : Theme.muted;
-            font-size: Theme.font-md;
-            overflow: elide;
-        }
-    }
-    if root.error != "": VerticalLayout {
-        alignment: center;
-        Badge {
-            text: "!";
-            tone: Tone.danger;
-        }
-    }
-    @children
-}
-
-export component Divider inherits Rectangle {
-    height: 1px;
-    background: Theme.light;
 }
 
 export component SectionTitle inherits HorizontalLayout {
@@ -200,7 +151,6 @@ export component Modal inherits Rectangle {
         border-color: Theme.light;
         drop-shadow-blur: 16px;
         drop-shadow-color: #00000080;
-        clip: true;
         TouchArea { }
         FocusScope {
             init => { self.focus(); }
@@ -266,7 +216,6 @@ export component TabBar inherits Rectangle {
     background: Theme.mid;
     border-width: 1px;
     border-color: Theme.light;
-    clip: true;
     accessible-role: tab-list;
 
     Flickable {
@@ -346,10 +295,10 @@ export component MenuButton inherits IconButton {
             drop-shadow-color: #00000080;
             VerticalLayout {
                 padding: 5px;
-                for item[i] in root.items: Rectangle {
+                for item[i] in root.items: entry := Rectangle {
                     height: Theme.list-row-h;
+                    property <float> dim: item.enabled ? 0 : 0.6;
                     border-radius: Theme.radius-md;
-                    opacity: item.enabled ? 1 : 0.4;
                     background: item-touch.has-hover && item.enabled ? Theme.light : transparent;
                     HorizontalLayout {
                         padding-left: 8px;
@@ -359,12 +308,12 @@ export component MenuButton inherits IconButton {
                             alignment: center;
                             Icon {
                                 source: item.icon;
-                                color: item.danger ? Theme.danger : Theme.fg;
+                                color: (item.danger ? Theme.danger : Theme.fg).transparentize(entry.dim);
                             }
                         }
                         Text {
                             text: item.text;
-                            color: item.danger ? Theme.danger : Theme.fg;
+                            color: (item.danger ? Theme.danger : Theme.fg).transparentize(entry.dim);
                             font-size: Theme.font-md;
                             vertical-alignment: center;
                             horizontal-stretch: 1;
@@ -423,7 +372,6 @@ export component Tile inherits Rectangle {
     }
 }
 
-// Cards side by side while they fit, wrapping onto new rows.
 export component CardFlow inherits FlexboxLayout {
     spacing: Theme.space-4;
     alignment: stretch;
@@ -535,20 +483,6 @@ export component ListRow inherits Rectangle {
     }
 }
 
-export component ListLabel inherits HorizontalLayout {
-    in property <string> text;
-    height: 28px;
-    padding-left: 10px;
-    Text {
-        text: root.text.to-uppercase();
-        color: Theme.subtle;
-        font-size: Theme.font-xs;
-        font-weight: 600;
-        letter-spacing: 0.44px;
-        vertical-alignment: center;
-    }
-}
-
 export component ListEmpty inherits HorizontalLayout {
     in property <string> text;
     height: 34px;
@@ -559,4 +493,8 @@ export component ListEmpty inherits HorizontalLayout {
         font-size: Theme.font-md;
         vertical-alignment: center;
     }
+}
+
+export component ListGap inherits Rectangle {
+    height: Theme.space-3;
 }

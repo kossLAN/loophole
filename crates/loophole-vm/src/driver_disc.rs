@@ -8,16 +8,13 @@ use serde::Deserialize;
 
 use crate::dirs;
 
-// kossLAN/loophole-guest-driver's workflow publishes every build of main as its latest release.
 const REPO: &str = "kossLAN/loophole-guest-driver";
 const ASSET: &str = "loophole-guest.iso";
 const PREFIX: &str = "loophole-guest-";
-// The previous build stays for a VM that may still hold it.
 const KEEP: usize = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Disc {
-    // The tag of the release it came from
     pub build: String,
     pub path: PathBuf,
 }
@@ -49,27 +46,26 @@ pub fn repo() -> String {
         .unwrap_or_else(|| REPO.to_owned())
 }
 
-// LOOPHOLE_DRIVER_DISC names the disc, and none is downloaded.
 pub fn pinned() -> bool {
     std::env::var_os("LOOPHOLE_DRIVER_DISC").is_some_and(|v| !v.is_empty())
 }
 
-// The build downloaded last.
 pub fn cached() -> Option<Disc> {
     cached_in(&dirs::driver_disc_dir()).into_iter().next()
 }
 
-// Newest first.
 fn cached_in(dir: &Path) -> Vec<Disc> {
     let Ok(entries) = fs::read_dir(dir) else {
         return Vec::new();
     };
+
     let mut found: Vec<(SystemTime, Disc)> = entries
         .flatten()
         .filter_map(|e| {
             let name = e.file_name().into_string().ok()?;
             let build = name.strip_prefix(PREFIX)?.strip_suffix(".iso")?.to_owned();
             let modified = e.metadata().ok()?.modified().ok()?;
+
             Some((
                 modified,
                 Disc {
@@ -88,7 +84,6 @@ fn agent() -> ureq::Agent {
         .user_agent(concat!("loophole/", env!("CARGO_PKG_VERSION")))
         .timeout_connect(Some(Duration::from_secs(15)))
         .timeout_recv_response(Some(Duration::from_secs(30)))
-        // A stalled download fails, a slow one goes on.
         .timeout_per_read(Some(Duration::from_secs(60)))
         .build()
         .into()
@@ -117,7 +112,7 @@ pub fn latest() -> Result<Release> {
         .and_then(|mut r| r.body_mut().read_json())
         .map_err(|e| failed(e, &repo))?;
     let build = release.tag_name;
-    // The tag names the cached file.
+
     if build.is_empty()
         || !build
             .chars()
@@ -125,11 +120,13 @@ pub fn latest() -> Result<Release> {
     {
         bail!("{repo}'s latest release has an unusable tag, {build:?}");
     }
+
     let asset = release
         .assets
         .into_iter()
         .find(|a| a.name == ASSET)
         .with_context(|| format!("{repo} {build} has no {ASSET}"))?;
+
     Ok(Release {
         build,
         url: asset.browser_download_url,
@@ -137,7 +134,6 @@ pub fn latest() -> Result<Release> {
     })
 }
 
-// `progress` gets the bytes received so far and the size.
 pub fn download(release: &Release, mut progress: impl FnMut(u64, u64)) -> Result<Disc> {
     let dir = dirs::driver_disc_dir();
     fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
@@ -150,11 +146,14 @@ pub fn download(release: &Release, mut progress: impl FnMut(u64, u64)) -> Result
     ));
     let done = fetch(release, &part, &mut progress)
         .and_then(|()| fs::rename(&part, &path).context("keeping the driver disc"));
+
     if done.is_err() {
         let _ = fs::remove_file(&part);
     }
+
     done?;
     prune(&dir);
+
     Ok(Disc {
         build: release.build.clone(),
         path,
@@ -170,19 +169,24 @@ fn fetch(release: &Release, to: &Path, progress: &mut impl FnMut(u64, u64)) -> R
     let mut file = File::create(to).with_context(|| format!("creating {}", to.display()))?;
     let mut buf = vec![0; 1 << 16];
     let mut received = 0;
+
     loop {
         let n = body.read(&mut buf).context("downloading the driver disc")?;
+
         if n == 0 {
             break;
         }
+
         file.write_all(&buf[..n])
             .with_context(|| format!("writing {}", to.display()))?;
         received += n as u64;
         progress(received, release.size);
     }
+
     if received != release.size {
         bail!("downloaded {received} bytes instead of {}", release.size);
     }
+
     file.sync_all()?;
     Ok(())
 }
@@ -191,13 +195,15 @@ fn prune(dir: &Path) {
     for old in cached_in(dir).iter().skip(KEEP) {
         let _ = fs::remove_file(&old.path);
     }
-    // Parts left by processes that ended mid-download.
+
     let day = Duration::from_hours(24);
+
     for e in fs::read_dir(dir).into_iter().flatten().flatten() {
         let stale = e
             .metadata()
             .and_then(|m| m.modified())
             .is_ok_and(|t| t.elapsed().is_ok_and(|age| age > day));
+
         if stale && e.file_name().to_string_lossy().ends_with(".part") {
             let _ = fs::remove_file(e.path());
         }

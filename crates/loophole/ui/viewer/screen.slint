@@ -1,0 +1,59 @@
+import { Theme } from "../theme.slint";
+
+export component Screen inherits Rectangle {
+    in property <image> frame;
+    in property <image> cursor;
+    in property <bool> cursor-visible;
+    in property <length> cursor-x;
+    in property <length> cursor-y;
+    in property <length> cursor-w;
+    in property <length> cursor-h;
+    in property <string> placeholder;
+    callback geometry(/* x */ length, /* y */ length, /* width */ length, /* height */ length);
+
+    background: black;
+    clip: true;
+
+    Image {
+        width: parent.width;
+        height: parent.height;
+        source: root.frame;
+        image-fit: contain;
+    }
+
+    if root.cursor-visible && touch.has-hover: Image {
+        x: root.cursor-x;
+        y: root.cursor-y;
+        width: root.cursor-w;
+        height: root.cursor-h;
+        source: root.cursor;
+    }
+
+    if root.placeholder != "": Text {
+        text: root.placeholder;
+        color: Theme.muted;
+        font-size: 15px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        wrap: word-wrap;
+        width: parent.width - 48px;
+        x: 24px;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: none;
+    }
+
+    init => {
+        root.geometry(root.absolute-position.x, root.absolute-position.y, root.width, root.height);
+    }
+    changed absolute-position => {
+        root.geometry(root.absolute-position.x, root.absolute-position.y, root.width, root.height);
+    }
+    changed width => {
+        root.geometry(root.absolute-position.x, root.absolute-position.y, root.width, root.height);
+    }
+    changed height => {
+        root.geometry(root.absolute-position.x, root.absolute-position.y, root.width, root.height);
+    }
+}

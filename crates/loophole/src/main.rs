@@ -4,6 +4,7 @@ mod gl;
 mod manager;
 mod models;
 mod picker;
+mod resize;
 mod screen;
 mod theme;
 mod ui;
@@ -23,7 +24,7 @@ use slint::winit_030::{CustomApplicationHandler, EventResult};
 
 use crate::manager::Manager;
 use crate::screen::{Options, Screen};
-pub use crate::ui::{MainWindow, VmItem};
+pub use crate::ui::{ViewerWindow, VmItem};
 
 #[derive(Parser)]
 #[command(version, about = "Run Windows VMs on the host's AMD GPU and show them")]
@@ -83,10 +84,10 @@ where
     std::thread::spawn(move || {
         let _ = tx.send_blocking(f());
     });
+
     rx.recv().await.expect("the worker thread sends its result")
 }
 
-// Only winit's device events carry the mouse's raw motion.
 struct RawMotion;
 
 impl CustomApplicationHandler for RawMotion {
@@ -99,18 +100,22 @@ impl CustomApplicationHandler for RawMotion {
         if let DeviceEvent::MouseMotion { delta } = event {
             screen::raw_motion(delta.0, delta.1);
         }
+
         EventResult::Propagate
     }
 }
 
-fn window() -> Result<MainWindow> {
+fn backend() -> Result<()> {
     slint::BackendSelector::new()
         .backend_name("winit".into())
         .renderer_name("femtovg".into())
         .with_winit_custom_application_handler(RawMotion)
         .select()
-        .context("no winit/OpenGL window backend")?;
-    let ui = MainWindow::new()?;
+        .context("no winit/OpenGL window backend")
+}
+
+pub fn viewer_window() -> Result<ViewerWindow> {
+    let ui = ViewerWindow::new()?;
     theme::follow(&ui);
     let weak = ui.as_weak();
     ui.on_toggle_fullscreen(move || {
@@ -119,6 +124,7 @@ fn window() -> Result<MainWindow> {
         ui.window().set_fullscreen(on);
         ui.set_fullscreen(on);
     });
+
     Ok(ui)
 }
 
@@ -127,15 +133,19 @@ fn view(args: ViewArgs) -> Result<()> {
         (Some(qmp), _) => (qmp, config::Display::default()),
         (None, Some(name)) => {
             let cfg = config::load(&name)?;
+
             if run::running_pid(&name).is_none() {
                 bail!("{name} is not running");
             }
+
             (RunPaths::new(&name).qmp(), cfg.display)
         },
         (None, None) => unreachable!("clap requires one"),
     };
-    let ui = window()?;
-    ui.set_manager(false);
+
+    backend()?;
+    let ui = viewer_window()?;
+    ui.set_controls(false);
     ui.set_stats_visible(args.stats);
     let opts = Options {
         resolution: args
@@ -151,28 +161,24 @@ fn view(args: ViewArgs) -> Result<()> {
         let _ = slint::quit_event_loop();
     });
     Screen::attach(&screen, qmp);
+
     if args.fullscreen {
         ui.invoke_toggle_fullscreen();
     }
+
     ui.run()?;
     Screen::detach(&screen);
     Ok(())
 }
 
 fn manage() -> Result<()> {
-    let ui = window()?;
-    let screen = Screen::install(&ui, Options::default());
-    let _manager = Manager::install(&ui, screen.clone());
-    ui.run()?;
-    Screen::detach(&screen);
+    backend()?;
+    let manager = Manager::install()?;
+    slint::run_event_loop()?;
+    manager.borrow().close_viewers();
     Ok(())
 }
 
-#[expect(
-    clippy::print_stdout,
-    clippy::print_stderr,
-    reason = "the command's output"
-)]
 fn list() {
     for cfg in config::load_all() {
         match cfg {
@@ -191,24 +197,22 @@ fn list() {
     }
 }
 
-#[expect(
-    clippy::print_stdout,
-    clippy::print_stderr,
-    reason = "the command's output"
-)]
 fn start(name: &str) -> Result<()> {
     let cfg = config::load(name)?;
     let mut tools = Tools::from_env()?;
+
     if cfg.media.driver_disc && tools.driver_disc.is_none() && !driver_disc::pinned() {
         let fetched = driver_disc::latest().and_then(|release| {
             eprintln!("loophole: downloading the driver disc, {}", release.build);
             driver_disc::download(&release, |_, _| {})
         });
+
         match fetched {
             Ok(disc) => tools.driver_disc = Some(disc.path),
             Err(e) => eprintln!("loophole: starting {name} without the driver disc: {e:#}"),
         }
     }
+
     run::start(&cfg, &tools)?;
     println!("{name} is running, `loophole view {name}` shows it");
     Ok(())
@@ -216,14 +220,17 @@ fn start(name: &str) -> Result<()> {
 
 fn stop(name: &str, force: bool) -> Result<()> {
     config::load(name)?;
+
     if run::running_pid(name).is_none() {
         bail!("{name} is not running");
     }
+
     let cmd = if force {
         qmp::Command::Quit
     } else {
         qmp::Command::SystemPowerdown
     };
+
     Qmp::connect(&RunPaths::new(name).qmp())?.run(&cmd)?;
     Ok(())
 }
@@ -235,7 +242,9 @@ fn check_disc(tools: &Tools) -> (bool, String) {
             |d| (true, d.display().to_string()),
         );
     }
+
     let cached = driver_disc::cached();
+
     let detail = match (&cached, driver_disc::latest()) {
         (Some(c), Ok(r)) if c.build == r.build => {
             format!("{} (the latest), {}", c.build, c.path.display())
@@ -250,10 +259,10 @@ fn check_disc(tools: &Tools) -> (bool, String) {
         (None, Ok(r)) => format!("not downloaded yet, loophole downloads {}", r.build),
         (None, Err(e)) => format!("not downloaded: {e:#}"),
     };
+
     (cached.is_some(), detail)
 }
 
-#[expect(clippy::print_stdout, reason = "the command's output")]
 fn check(name: Option<&str>) -> ExitCode {
     let mut ready = true;
     let mut line = |ok: bool, required: bool, what: &str, detail: &str| {
@@ -262,12 +271,15 @@ fn check(name: Option<&str>) -> ExitCode {
             (false, true) => "MISSING",
             (false, false) => "missing",
         };
+
         ready &= ok || !required;
         println!("{mark:8} {what:12} {detail}");
     };
+
     for c in host::checks() {
         line(c.ok, c.required, c.what, &c.detail);
     }
+
     match Tools::from_env() {
         Ok(tools) => {
             line(true, true, "QEMU", &tools.qemu.display().to_string());
@@ -276,6 +288,7 @@ fn check(name: Option<&str>) -> ExitCode {
         },
         Err(e) => line(false, true, "QEMU", &format!("{e:#}")),
     }
+
     if let Some(name) = name {
         match config::load(name) {
             Ok(cfg) => {
@@ -284,9 +297,11 @@ fn check(name: Option<&str>) -> ExitCode {
                     .into_iter()
                     .chain(run::preflight(&cfg))
                     .collect();
+
                 if issues.is_empty() {
                     line(true, true, name, "ready to start");
                 }
+
                 for i in issues {
                     line(!i.fatal, true, name, &i.message);
                 }
@@ -294,6 +309,7 @@ fn check(name: Option<&str>) -> ExitCode {
             Err(e) => line(false, true, name, &format!("{e:#}")),
         }
     }
+
     if ready {
         ExitCode::SUCCESS
     } else {
@@ -310,5 +326,6 @@ fn main() -> Result<ExitCode> {
         Some(Command::Stop { name, force }) => stop(&name, force)?,
         Some(Command::Check { name }) => return Ok(check(name.as_deref())),
     }
+
     Ok(ExitCode::SUCCESS)
 }

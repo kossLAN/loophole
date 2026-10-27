@@ -25,7 +25,6 @@ pub enum Frame {
         modifier: u64,
         y0_top: bool,
     },
-    // pixman x8r8g8b8 or a8r8g8b8.
     Memory {
         width: u32,
         height: u32,
@@ -44,7 +43,6 @@ pub struct CursorShape {
 
 pub enum Event {
     Scanout(Frame),
-    // `data` carries the pixels of a memory surface.
     Update {
         x: i32,
         y: i32,
@@ -82,15 +80,16 @@ fn plausible(planes: &[Plane], height: u32) -> Result<(), String> {
     if planes.is_empty() || planes.len() > 4 {
         return Err(format!("{} planes", planes.len()));
     }
+
     for (i, p) in planes.iter().enumerate() {
         let size = file_size(&p.fd).ok_or("dma-buf size unknown")?;
-        // Plane 0 holds every row. Metadata planes are smaller.
         let need = u64::from(p.offset)
             + if i == 0 {
                 u64::from(p.stride) * u64::from(height)
             } else {
                 1
             };
+
         if p.stride == 0 || need > size {
             return Err(format!(
                 "plane {i}: offset {} + {} rows of {} > {size} bytes",
@@ -98,6 +97,7 @@ fn plausible(planes: &[Plane], height: u32) -> Result<(), String> {
             ));
         }
     }
+
     Ok(())
 }
 
@@ -139,7 +139,6 @@ impl Listener {
         });
     }
 
-    // QEMUs without ScanoutDMABUF2 call this. It carries plane 0 only.
     #[zbus(name = "ScanoutDMABUF")]
     fn scanout_dmabuf(
         &self,
@@ -157,6 +156,7 @@ impl Listener {
             )));
             return Ok(());
         }
+
         let fd = dmabuf
             .as_fd()
             .try_clone_to_owned()
@@ -183,7 +183,6 @@ impl Listener {
         });
     }
 
-    // QEMU also sends this inside every flip, between the new scanout and its update.
     #[expect(clippy::unused_self, reason = "zbus serves methods with a receiver")]
     fn disable(&self) {}
 
@@ -271,13 +270,16 @@ impl ListenerV2 {
         y0_top: bool,
     ) -> zbus::fdo::Result<()> {
         let n = num_planes as usize;
+
         if n == 0 || n > dmabuf.len() || n > offset.len() || n > stride.len() {
             self.0.send(Event::Rejected(format!(
                 "inconsistent {num_planes}-plane scanout"
             )));
             return Ok(());
         }
+
         let mut planes = Vec::with_capacity(n);
+
         for i in 0..n {
             let fd = dmabuf[i]
                 .as_fd()
@@ -289,13 +291,14 @@ impl ListenerV2 {
                 stride: stride[i],
             });
         }
+
         self.0
             .scanout_planes(planes, width, height, fourcc, modifier, y0_top);
+
         Ok(())
     }
 }
 
-// QEMU may call either interface as soon as the connection starts.
 pub async fn register(console: &ConsoleProxy<'_>, tx: Sender<Event>) -> Result<zbus::Connection> {
     let (ours, theirs) = UnixStream::pair()?;
     console.register_listener(theirs.as_fd().into()).await?;
@@ -306,5 +309,6 @@ pub async fn register(console: &ConsoleProxy<'_>, tx: Sender<Event>) -> Result<z
         .serve_at("/org/qemu/Display1/Listener", ListenerV2(listener))?
         .build()
         .await?;
+
     Ok(conn)
 }

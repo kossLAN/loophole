@@ -1,0 +1,100 @@
+import { Theme } from "../theme.slint";
+import { VmItem } from "../state.slint";
+import { Header } from "header.slint";
+import { Screen } from "screen.slint";
+import { StatusBar } from "../components/index.slint";
+
+export component ViewerWindow inherits Window {
+    in property <bool> controls: true;
+    in property <bool> fullscreen;
+    in property <string> vm-name;
+    in property <VmItem> vm;
+    in property <bool> driver-disc-available;
+    in property <string> message;
+
+    in property <image> frame;
+    in property <image> cursor;
+    in property <bool> cursor-visible;
+    in property <length> cursor-x;
+    in property <length> cursor-y;
+    in property <length> cursor-w;
+    in property <length> cursor-h;
+    in property <string> placeholder;
+    in property <bool> stats-visible;
+    in property <string> stats;
+    in property <string> hint;
+
+    callback start();
+    callback shutdown();
+    callback force-off();
+    callback pause();
+    callback resume();
+    callback reset();
+    callback ctrl-alt-del();
+    callback eject-install-media();
+    callback set-driver-disc(bool);
+    callback settings();
+    callback toggle-fullscreen();
+    callback screen-geometry(length, length, length, length);
+
+    title: root.vm-name != "" ? root.vm-name + " – loophole" : "loophole";
+    background: Theme.bg;
+    preferred-width: 1280px;
+    preferred-height: 800px;
+    min-width: 640px;
+    min-height: 400px;
+    default-font-size: Theme.font-md;
+
+    property <bool> chrome: root.controls && !root.fullscreen;
+
+    VerticalLayout {
+        if root.chrome: Header {
+            vm: root.vm;
+            driver-disc-available: root.driver-disc-available;
+            start => { root.start(); }
+            pause => { root.pause(); }
+            resume => { root.resume(); }
+            ctrl-alt-del => { root.ctrl-alt-del(); }
+            reset => { root.reset(); }
+            shutdown => { root.shutdown(); }
+            force-off => { root.force-off(); }
+            eject-install-media => { root.eject-install-media(); }
+            set-driver-disc(on) => { root.set-driver-disc(on); }
+            fullscreen => { root.toggle-fullscreen(); }
+            settings => { root.settings(); }
+        }
+
+        Screen {
+            vertical-stretch: 1;
+            frame: root.frame;
+            cursor: root.cursor;
+            cursor-visible: root.cursor-visible;
+            cursor-x: root.cursor-x;
+            cursor-y: root.cursor-y;
+            cursor-w: root.cursor-w;
+            cursor-h: root.cursor-h;
+            placeholder: root.placeholder;
+            geometry(x, y, w, h) => { root.screen-geometry(x, y, w, h); }
+        }
+
+        if root.chrome && (root.hint != "" || root.message != ""): StatusBar {
+            message: root.message;
+            hint: root.hint;
+        }
+    }
+
+    if root.stats-visible: Rectangle {
+        x: 12px;
+        y: root.chrome ? Theme.header-h + 12px : 12px;
+        width: stats-text.preferred-width + 20px;
+        height: stats-text.preferred-height + 14px;
+        background: #000000b0;
+        border-radius: Theme.radius-sm;
+        stats-text := Text {
+            text: root.stats;
+            color: Theme.fg;
+            font-family: Theme.mono;
+            font-size: Theme.font-sm;
+        }
+    }
+}

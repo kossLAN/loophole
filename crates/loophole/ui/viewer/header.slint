@@ -1,0 +1,158 @@
+import { Theme } from "../theme.slint";
+import { Icons } from "../icons.slint";
+import { VmItem } from "../state.slint";
+import { Button, ButtonKind, IconButton, MenuButton, StatusDot } from "../components/index.slint";
+
+export component Header inherits Rectangle {
+    in property <VmItem> vm;
+    in property <bool> driver-disc-available;
+    callback start();
+    callback pause();
+    callback resume();
+    callback ctrl-alt-del();
+    callback reset();
+    callback shutdown();
+    callback force-off();
+    callback eject-install-media();
+    callback set-driver-disc(bool);
+    callback fullscreen();
+    callback settings();
+
+    property <bool> settled: root.vm.state != "starting";
+
+    height: Theme.header-h;
+    background: Theme.bg;
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.border;
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.space-5;
+        padding-right: Theme.space-4;
+        spacing: Theme.space-1;
+
+        VerticalLayout {
+            alignment: center;
+            padding-right: 8px;
+            StatusDot {
+                state: root.vm.state;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 1px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.vm.name;
+                color: Theme.fg;
+                font-size: Theme.font-xl;
+                font-weight: 650;
+                overflow: elide;
+            }
+            Text {
+                text: root.vm.state + (root.vm.summary != "" ? "  " + root.vm.summary : "");
+                color: Theme.muted;
+                font-size: Theme.font-sm;
+                overflow: elide;
+            }
+        }
+
+        if !root.vm.running: VerticalLayout {
+            alignment: center;
+            Button {
+                text: "Start";
+                icon: Icons.play;
+                kind: ButtonKind.primary;
+                enabled: root.vm.state == "stopped";
+                clicked => { root.start(); }
+            }
+        }
+        if root.vm.running && !root.vm.paused: VerticalLayout {
+            alignment: center;
+            IconButton {
+                icon: Icons.pause;
+                tooltip: "Pause";
+                clicked => { root.pause(); }
+            }
+        }
+        if root.vm.paused: VerticalLayout {
+            alignment: center;
+            IconButton {
+                icon: Icons.play;
+                tooltip: "Resume";
+                active: true;
+                clicked => { root.resume(); }
+            }
+        }
+        if root.vm.running: VerticalLayout {
+            alignment: center;
+            IconButton {
+                icon: Icons.keyboard;
+                tooltip: "Send Ctrl+Alt+Del";
+                clicked => { root.ctrl-alt-del(); }
+            }
+        }
+        if root.vm.running: VerticalLayout {
+            alignment: center;
+            IconButton {
+                icon: Icons.rotate-ccw;
+                tooltip: "Reset";
+                clicked => { root.reset(); }
+            }
+        }
+        if root.vm.running: VerticalLayout {
+            alignment: center;
+            IconButton {
+                icon: Icons.maximize;
+                tooltip: "Fullscreen (Ctrl+Alt+F)";
+                clicked => { root.fullscreen(); }
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            MenuButton {
+                icon: Icons.disc-3;
+                tooltip: "Discs";
+                enabled: root.settled;
+                items: [
+                    { text: root.vm.install-media ? "Eject Windows image" : "No Windows image", icon: Icons.eject, enabled: root.vm.install-media, danger: false },
+                    { text: !root.driver-disc-available ? "No driver disc yet" : root.vm.driver-disc ? "Eject driver disc" : "Insert driver disc", icon: Icons.disc-3, enabled: root.driver-disc-available, danger: false },
+                ];
+                activated(i) => {
+                    if (i == 0) {
+                        root.eject-install-media();
+                    } else {
+                        root.set-driver-disc(!root.vm.driver-disc);
+                    }
+                }
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            IconButton {
+                icon: Icons.sliders-horizontal;
+                tooltip: "Settings";
+                clicked => { root.settings(); }
+            }
+        }
+        if root.vm.running: VerticalLayout {
+            alignment: center;
+            IconButton {
+                icon: Icons.power;
+                tooltip: "Shut down";
+                clicked => { root.shutdown(); }
+            }
+        }
+        if root.vm.running: VerticalLayout {
+            alignment: center;
+            IconButton {
+                icon: Icons.power-off;
+                tooltip: "Force off";
+                kind: ButtonKind.danger;
+                clicked => { root.force-off(); }
+            }
+        }
+    }
+}

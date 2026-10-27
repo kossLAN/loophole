@@ -1,0 +1,159 @@
+import { Theme } from "../theme.slint";
+import { Icons } from "../icons.slint";
+import { Edit, EditMode, VmEdit } from "state.slint";
+import { Button, ButtonKind, Icon, Notice, ScrollArea, TabBar, Tone } from "../components/index.slint";
+import { SetupTab } from "tabs/setup.slint";
+import { CpuTab } from "tabs/cpu.slint";
+import { StorageTab } from "tabs/storage.slint";
+import { NetworkTab } from "tabs/network.slint";
+import { DevicesTab } from "tabs/devices.slint";
+import { DisplayTab } from "tabs/display.slint";
+import { BootTab } from "tabs/boot.slint";
+import { AdvancedTab } from "tabs/advanced.slint";
+
+export component VmPane inherits VerticalLayout {
+    property <VmEdit> watched: Edit.vm;
+    changed watched => {
+        Edit.edited();
+    }
+
+    property <bool> creating: Edit.mode == EditMode.create;
+    property <int> page: root.creating ? Edit.tab - 1 : Edit.tab;
+
+    HorizontalLayout {
+        alignment: center;
+        padding-left: Theme.space-5;
+        padding-right: Theme.space-5;
+        padding-top: Theme.space-3;
+        if root.creating: TabBar {
+            current <=> Edit.tab;
+            tabs: [
+                { label: "Setup", icon: Icons.plus, issues: Edit.tab-issues[0] },
+                { label: "CPU & Memory", icon: Icons.cpu, issues: Edit.tab-issues[1] },
+                { label: "Storage", icon: Icons.hard-drive, issues: Edit.tab-issues[2] },
+                { label: "Network", icon: Icons.network, issues: Edit.tab-issues[3] },
+                { label: "Devices", icon: Icons.microchip, issues: Edit.tab-issues[4] },
+                { label: "Display & Input", icon: Icons.monitor, issues: Edit.tab-issues[5] },
+                { label: "Boot", icon: Icons.list-ordered, issues: Edit.tab-issues[6] },
+                { label: "Advanced", icon: Icons.sliders-horizontal, issues: Edit.tab-issues[7] },
+            ];
+        }
+        if !root.creating: TabBar {
+            current <=> Edit.tab;
+            tabs: [
+                { label: "CPU & Memory", icon: Icons.cpu, issues: Edit.tab-issues[0] },
+                { label: "Storage", icon: Icons.hard-drive, issues: Edit.tab-issues[1] },
+                { label: "Network", icon: Icons.network, issues: Edit.tab-issues[2] },
+                { label: "Devices", icon: Icons.microchip, issues: Edit.tab-issues[3] },
+                { label: "Display & Input", icon: Icons.monitor, issues: Edit.tab-issues[4] },
+                { label: "Boot", icon: Icons.list-ordered, issues: Edit.tab-issues[5] },
+                { label: "Advanced", icon: Icons.sliders-horizontal, issues: Edit.tab-issues[6] },
+            ];
+        }
+    }
+
+    scroll := ScrollArea {
+        HorizontalLayout {
+            padding-top: Theme.space-5;
+            padding-bottom: Theme.space-5;
+            padding-left: max(Theme.space-5, (scroll.width - 920px) / 2);
+            padding-right: max(Theme.space-5, (scroll.width - 920px) / 2);
+            VerticalLayout {
+                spacing: Theme.space-4;
+                if Edit.locked: Notice {
+                    title: "Running";
+                    text: "Shut down to change hardware. Discs change at once from the disc menu.";
+                    tone: Tone.info;
+                    vertical-stretch: 0;
+                }
+                for w in Edit.warnings: Notice {
+                    text: w;
+                    tone: Tone.warn;
+                    vertical-stretch: 0;
+                }
+                if root.page == -1: SetupTab {
+                    vertical-stretch: 0;
+                }
+                if root.page == 0: CpuTab {
+                    vertical-stretch: 0;
+                }
+                if root.page == 1: StorageTab {
+                    vertical-stretch: 1;
+                }
+                if root.page == 2: NetworkTab {
+                    vertical-stretch: 1;
+                }
+                if root.page == 3: DevicesTab {
+                    vertical-stretch: 1;
+                }
+                if root.page == 4: DisplayTab {
+                    vertical-stretch: 0;
+                }
+                if root.page == 5: BootTab {
+                    vertical-stretch: 0;
+                }
+                if root.page == 6: AdvancedTab {
+                    vertical-stretch: 0;
+                }
+                if root.page < 1 || root.page > 3: Rectangle {
+                    vertical-stretch: 1;
+                }
+            }
+        }
+    }
+
+    if Edit.mode == EditMode.create || Edit.mode == EditMode.edit || Edit.dirty: Rectangle {
+        height: 56px;
+        background: Theme.surface;
+        Rectangle {
+            y: 0px;
+            height: 1px;
+            background: Theme.border;
+        }
+        HorizontalLayout {
+            padding-left: Theme.space-5;
+            padding-right: Theme.space-5;
+            spacing: Theme.space-2;
+            if Edit.summary != "": VerticalLayout {
+                alignment: center;
+                Icon {
+                    source: Icons.circle-alert;
+                    color: Theme.danger;
+                }
+            }
+            Text {
+                text: Edit.summary != "" ? Edit.summary : Edit.dirty && Edit.mode == EditMode.edit ? "Unsaved changes" : "";
+                color: Edit.summary != "" ? Theme.danger : Theme.muted;
+                font-size: Theme.font-md;
+                vertical-alignment: center;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+            VerticalLayout {
+                alignment: center;
+                if Edit.mode == EditMode.create: Button {
+                    text: "Cancel";
+                    kind: ButtonKind.ghost;
+                    clicked => { Edit.cancel-create(); }
+                }
+                if Edit.mode != EditMode.create: Button {
+                    text: "Revert";
+                    icon: Icons.undo-2;
+                    kind: ButtonKind.ghost;
+                    enabled: Edit.dirty;
+                    clicked => { Edit.revert(); }
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                Button {
+                    text: Edit.mode == EditMode.create ? "Create" : "Apply";
+                    icon: Edit.mode == EditMode.create ? Icons.plus : Icons.save;
+                    kind: ButtonKind.primary;
+                    enabled: Edit.mode == EditMode.create || Edit.dirty;
+                    clicked => { Edit.apply(); }
+                }
+            }
+        }
+    }
+}

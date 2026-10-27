@@ -121,7 +121,6 @@ pub struct Qmp {
     stream: UnixStream,
     reader: BufReader<UnixStream>,
     pending: VecDeque<Event>,
-    // What a read timeout cut short. The rest of the line follows.
     partial: String,
 }
 
@@ -129,6 +128,7 @@ impl Qmp {
     pub fn connect(path: &Path) -> Result<Self> {
         let stream = UnixStream::connect(path)
             .with_context(|| format!("connecting to {}", path.display()))?;
+
         Self::from_stream(stream).with_context(|| path.display().to_string())
     }
 
@@ -142,9 +142,11 @@ impl Qmp {
             partial: String::new(),
         };
         let greeting: Message<IgnoredAny> = qmp.read()?.context("QMP connection closed")?;
+
         if greeting.greeting.is_none() {
             bail!("not a QMP socket");
         }
+
         qmp.run(&Command::QmpCapabilities)?;
         Ok(qmp)
     }
@@ -153,6 +155,7 @@ impl Qmp {
         if self.reader.read_line(&mut self.partial)? == 0 {
             return Ok(None);
         }
+
         Ok(Some(std::mem::take(&mut self.partial)))
     }
 
@@ -170,6 +173,7 @@ impl Qmp {
             self.stream.write_all(text.as_bytes())?;
             return Ok(());
         };
+
         let fds = [fd.as_fd()];
         let mut space = [std::mem::MaybeUninit::uninit(); rustix::cmsg_space!(ScmRights(1))];
         let mut control = SendAncillaryBuffer::new(&mut space);
@@ -180,6 +184,7 @@ impl Qmp {
             &mut control,
             SendFlags::empty(),
         )?;
+
         Ok(())
     }
 
@@ -190,9 +195,11 @@ impl Qmp {
         let mut text = serde_json::to_string(cmd)?;
         text.push('\n');
         self.send(&text, fd)?;
+
         loop {
             let line = self.read_line()?.context("QMP connection closed")?;
             let msg: Message<R> = serde_json::from_str(&line)?;
+
             if msg.event.is_some() {
                 self.pending.push_back(serde_json::from_str(&line)?);
             } else if let Some(e) = msg.error {
@@ -217,18 +224,20 @@ impl Qmp {
         self.execute::<IgnoredAny>(cmd).map(drop)
     }
 
-    // Ok(None) on timeout. Err once QEMU has closed the connection.
     pub fn next_event(&mut self, timeout: Duration) -> Result<Option<Event>> {
         if let Some(event) = self.pending.pop_front() {
             return Ok(Some(event));
         }
+
         self.stream.set_read_timeout(Some(timeout))?;
         let line = self.read_line();
         self.stream
             .set_read_timeout(Some(Duration::from_secs(10)))?;
+
         match line {
             Ok(Some(line)) => {
                 let msg: Message<IgnoredAny> = serde_json::from_str(&line)?;
+
                 if msg.event.is_some() {
                     Ok(Some(serde_json::from_str(&line)?))
                 } else {
@@ -246,7 +255,6 @@ impl Qmp {
     }
 }
 
-// QEMU serves one peer-to-peer D-Bus display client at a time: a new one takes the display.
 pub fn attach_display(qmp_path: &Path) -> Result<UnixStream> {
     let mut qmp = Qmp::connect(qmp_path)?;
     let (ours, theirs) = UnixStream::pair()?;
@@ -259,7 +267,6 @@ pub fn attach_display(qmp_path: &Path) -> Result<UnixStream> {
     Ok(ours)
 }
 
-// The guest may hold the tray shut. These force it.
 pub fn change_medium(drive: &'static str, media: Option<PathBuf>) -> Vec<Command> {
     let Some(filename) = media else {
         return vec![
@@ -271,6 +278,7 @@ pub fn change_medium(drive: &'static str, media: Option<PathBuf>) -> Vec<Command
             Command::BlockdevCloseTray { id: drive },
         ];
     };
+
     vec![Command::BlockdevChangeMedium {
         id: drive,
         filename,

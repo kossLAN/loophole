@@ -65,6 +65,7 @@ pub fn parse(table: toml::Table) -> Result<VmConfig> {
         serial: (!virtio).then(|| "wormhole0".into()),
         boot_order: Some(1),
     };
+
     Ok(VmConfig {
         name: String::new(),
         cpu: Cpu {

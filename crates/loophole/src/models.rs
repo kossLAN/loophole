@@ -3,9 +3,23 @@ use std::rc::Rc;
 
 use slint::{Model, ModelRc, ModelTracker, VecModel};
 
-// Slint writes a row back through set_row_data when a two-way binding to one of its fields
-// changes. Rust's own writes go to `rows` and do not count as edits. `on_edit` must not borrow
-// what owns the model: it runs inside Slint's event handling.
+pub fn sync<T>(model: &VecModel<T>, rows: Vec<T>)
+where
+    T: Clone + PartialEq + 'static,
+{
+    while model.row_count() > rows.len() {
+        model.remove(model.row_count() - 1);
+    }
+
+    for (i, row) in rows.into_iter().enumerate() {
+        match model.row_data(i) {
+            Some(old) if old == row => {},
+            Some(_) => model.set_row_data(i, row),
+            None => model.push(row),
+        }
+    }
+}
+
 pub struct Tracked<T> {
     rows: VecModel<T>,
     on_edit: Rc<dyn Fn()>,

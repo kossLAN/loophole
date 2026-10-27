@@ -1,0 +1,46 @@
+import { Theme } from "../theme.slint";
+
+export struct TrayVm {
+    name: string,
+    label: string,
+}
+
+export component TrayIcon inherits SystemTrayIcon {
+    in property <[TrayVm]> vms;
+    in property <int> running;
+    callback open();
+    callback view(string);
+    callback about();
+    callback quit();
+
+    // TODO: replace sys tray icon with proper logo at some point
+    icon: Theme.dark ? @image-url("../icons/tray-white.svg") : @image-url("../icons/tray-black.svg");
+    title: "loophole";
+    tooltip: root.running == 0 ? "No VM running" : root.running == 1 ? "1 VM running" : root.running + " VMs running";
+    clicked => { root.open(); }
+
+    Menu {
+        MenuItem {
+            title: "Open";
+            activated => { root.open(); }
+        }
+        MenuSeparator { }
+        if root.vms.length == 0: MenuItem {
+            title: "No VMs yet";
+            enabled: false;
+        }
+        for vm in root.vms: MenuItem {
+            title: vm.label;
+            activated => { root.view(vm.name); }
+        }
+        MenuSeparator { }
+        MenuItem {
+            title: "About";
+            activated => { root.about(); }
+        }
+        MenuItem {
+            title: "Quit";
+            activated => { root.quit(); }
+        }
+    }
+}

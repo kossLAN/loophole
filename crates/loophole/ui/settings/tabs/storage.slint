@@ -1,0 +1,223 @@
+import { Theme } from "../../theme.slint";
+import { Icons } from "../../icons.slint";
+import { DiskKind, Edit, Picking } from "../state.slint";
+import {
+    Button, ButtonKind, Card, FormRow, ListEmpty, ListGap, ListPane, ListRow, Notice, NumberField,
+    PathField, Select, Switch, TextField, Tone,
+} from "../../components/index.slint";
+
+export component StorageTab inherits VerticalLayout {
+    // A disk's index, -1 for the first CD drive, -2 for the second.
+    property <int> selected;
+    property <int> count: Edit.disks.length;
+    property <int> seen;
+
+    init => {
+        root.seen = root.count;
+        root.selected = root.count > 0 ? 0 : -1;
+    }
+    changed count => {
+        if (root.count > root.seen) {
+            root.selected = root.count - 1;
+        } else if (root.selected >= root.count) {
+            root.selected = root.count - 1;
+        }
+        root.seen = root.count;
+    }
+
+    spacing: Theme.space-4;
+
+    if Edit.disks.length == 0: Notice {
+        text: "No disks, the VM boots from a disc or a passed-through controller";
+        tone: Tone.warn;
+    }
+
+    HorizontalLayout {
+        spacing: Theme.space-4;
+
+        ListPane {
+            title: "Storage";
+            add-items: [
+                { text: "New image", icon: Icons.plus, enabled: true },
+                { text: "Existing image", icon: Icons.folder-open, enabled: true },
+                { text: "Host disk", icon: Icons.hard-drive-download, enabled: true },
+            ];
+            add-enabled: !Edit.locked;
+            add(k) => {
+                if (k == 2) {
+                    Edit.pick-device(Picking.disks);
+                } else {
+                    Edit.add-disk(k == 0 ? DiskKind.new-image : DiskKind.image);
+                }
+            }
+            if Edit.disks.length == 0: ListEmpty {
+                text: "No disks";
+            }
+            for disk[i] in Edit.disks: ListRow {
+                icon: disk.kind == DiskKind.device ? Icons.hard-drive-download : Icons.hard-drive;
+                title: disk.title;
+                subtitle: disk.info;
+                problem: disk.error != "" || disk.warning != "";
+                selected: root.selected == i;
+                clicked => { root.selected = i; }
+            }
+            ListGap { }
+            ListRow {
+                icon: Icons.disc-3;
+                title: "Windows image";
+                subtitle: Edit.install-name != "" ? Edit.install-name : "Empty";
+                problem: Edit.issues.media != "";
+                selected: root.selected == -1;
+                clicked => { root.selected = -1; }
+            }
+            ListRow {
+                icon: Icons.disc-3;
+                title: "Driver disc";
+                subtitle: !Edit.driver-disc-available ? Edit.driver-disc-hint : Edit.vm.driver-disc ? Edit.driver-disc-name : "Empty";
+                selected: root.selected == -2;
+                clicked => { root.selected = -2; }
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            VerticalLayout {
+                for disk[i] in Edit.disks: VerticalLayout {
+                    if i == root.selected: Card {
+                        title: "Disk " + (i + 1);
+                        subtitle: disk.info;
+                        warning: disk.error != "" || disk.warning != "";
+                        action-icon: Icons.trash-2;
+                        action-enabled: !Edit.locked;
+                        action-tooltip: disk.kind == DiskKind.image ? "Detach (the image stays)" : "Remove";
+                        action-kind: ButtonKind.danger;
+                        action => { Edit.remove-disk(i); }
+                        if disk.kind == DiskKind.new-image: FormRow {
+                            label: "Size";
+                            icon: Icons.hard-drive;
+                            hint: Edit.host-storage;
+                            NumberField {
+                                value <=> disk.new-gib;
+                                minimum: 1;
+                                maximum: 65536;
+                                step: 16;
+                                unit: "GiB";
+                                enabled: !Edit.locked;
+                            }
+                        }
+                        if disk.kind == DiskKind.image: FormRow {
+                            label: "Image";
+                            icon: Icons.hard-drive;
+                            hint: "qcow2 or raw";
+                            PathField {
+                                path <=> disk.path;
+                                enabled: !Edit.locked;
+                                invalid: disk.error != "";
+                                browse => { Edit.browse-disk(i); }
+                            }
+                        }
+                        if disk.kind == DiskKind.device: FormRow {
+                            label: "Device";
+                            icon: Icons.hard-drive-download;
+                            hint: "Whole disk by ID";
+                            HorizontalLayout {
+                                spacing: 6px;
+                                TextField {
+                                    text <=> disk.path;
+                                    mono: true;
+                                    enabled: !Edit.locked;
+                                    invalid: disk.error != "";
+                                    placeholder: "/dev/disk/by-id/…";
+                                }
+                                if !Edit.locked: Button {
+                                    text: "Choose…";
+                                    clicked => { Edit.change-disk-device(i); }
+                                }
+                            }
+                        }
+                        FormRow {
+                            label: "Attached as";
+                            icon: Icons.microchip;
+                            hint: disk.bus == 0 ? "Driver built into Windows" : disk.bus == 1 ? "Needs virtio-win" : "For images installed on SATA";
+                            Select {
+                                model: Edit.options.buses;
+                                current-index <=> disk.bus;
+                                enabled: !Edit.locked;
+                            }
+                        }
+                        if disk.kind != DiskKind.device: FormRow {
+                            label: "Format";
+                            icon: Icons.scroll-text;
+                            Select {
+                                model: Edit.options.formats;
+                                current-index <=> disk.format;
+                                enabled: !Edit.locked;
+                            }
+                        }
+                        FormRow {
+                            label: "Cache";
+                            icon: Icons.refresh-cw;
+                            hint: "Automatic caches images, not disks";
+                            Select {
+                                model: Edit.options.caches;
+                                current-index <=> disk.cache;
+                                enabled: !Edit.locked;
+                            }
+                        }
+                        FormRow {
+                            label: "Discard";
+                            icon: Icons.trash-2;
+                            hint: "Pass TRIM to the host";
+                            Switch {
+                                checked <=> disk.discard;
+                                enabled: !Edit.locked;
+                                label: "Discard";
+                            }
+                        }
+                        FormRow {
+                            label: "Serial";
+                            icon: Icons.info;
+                            hint: "Up to 20 characters";
+                            error: disk.error;
+                            warning: disk.warning;
+                            TextField {
+                                text <=> disk.serial;
+                                placeholder: "loophole" + i;
+                                mono: true;
+                                enabled: !Edit.locked;
+                            }
+                        }
+                    }
+                }
+            }
+            if root.selected == -1: Card {
+                title: "Windows image";
+                FormRow {
+                    label: "Windows image";
+                    icon: Icons.disc-3;
+                    error: Edit.issues.media;
+                    PathField {
+                        path <=> Edit.vm.install;
+                        placeholder: "None";
+                        clearable: true;
+                        enabled: !Edit.locked;
+                        browse => { Edit.browse-install(); }
+                    }
+                }
+            }
+            if root.selected == -2: Card {
+                title: "Driver disc";
+                FormRow {
+                    label: "loophole driver disc";
+                    icon: Icons.disc-3;
+                    hint: Edit.driver-disc-hint;
+                    Switch {
+                        checked <=> Edit.vm.driver-disc;
+                        enabled: Edit.driver-disc-available && !Edit.locked;
+                        label: "loophole driver disc";
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,26 @@
+import { Icons } from "../../icons.slint";
+import { Edit } from "../state.slint";
+import { Card, CardFlow, FormRow, Segmented, TextField } from "../../components/index.slint";
+
+export component SetupTab inherits CardFlow {
+    Card {
+        title: "Machine";
+        FormRow {
+            label: "Name";
+            icon: Icons.app-window;
+            error: Edit.issues.general;
+            TextField {
+                text <=> Edit.vm.name;
+                placeholder: "win11";
+            }
+        }
+        FormRow {
+            label: "Version";
+            icon: Icons.app-window;
+            Segmented {
+                model: Edit.options.windows;
+                current-index <=> Edit.vm.windows;
+            }
+        }
+    }
+}

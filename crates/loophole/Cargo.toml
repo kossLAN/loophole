@@ -11,22 +11,24 @@ license = "MIT"
 anyhow = "1"
 ashpd = { version = "0.13", default-features = false, features = ["async-io", "file_chooser", "settings"] }
 async-channel = "2"
-clap = { version = "4", features = ["derive"] }
-glow = "0.17"
+clap = { version = "4", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
+futures-util = { version = "0.3", default-features = false }
+glow = "0.18"
 khronos-egl = { version = "6", features = ["dynamic"] }
-slint = { version = "1.18", default-features = false, features = [
+slint = { version = "~1.18", default-features = false, features = [
     "std",
-    "compat-1-2",
+    "compat-1-18",
     "accessibility",
     "backend-winit",
     "renderer-femtovg",
+    "system-tray",
     "unstable-winit-030",
 ] }
 loophole-display = { path = "../loophole-display" }
 loophole-vm = { path = "../loophole-vm" }
 
 [build-dependencies]
-slint-build = "1.18"
+slint-build = "~1.18"
 
 [lints]
 workspace = true

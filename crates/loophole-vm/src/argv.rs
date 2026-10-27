@@ -51,7 +51,6 @@ impl RunPaths {
     }
 }
 
-// QOM ids of the CD drives, for changing media at run time.
 pub const INSTALL_DRIVE: &str = "install";
 pub const DRIVER_DRIVE: &str = "driver";
 
@@ -59,7 +58,6 @@ pub struct Host<'a> {
     pub render_node: &'a Path,
     pub pipewire: bool,
     pub io_uring: bool,
-    // Per disk: the logical block size of a host device.
     pub block_sizes: &'a [Option<u32>],
 }
 
@@ -90,7 +88,6 @@ const fn nic_slot(i: usize) -> u32 {
     }
 }
 
-// QEMU's option syntax doubles commas inside values.
 fn escaped(value: &str) -> String {
     value.replace(',', ",,")
 }
@@ -141,10 +138,11 @@ pub fn argv(
     a.pair("-name", cfg.name.as_str());
     a.flag("-enable-kvm");
     let mut machine = "q35,smm=on,memory-backend=mem".to_owned();
+
     if !cfg.machine.options.trim().is_empty() {
         machine = format!("{machine},{}", cfg.machine.options.trim());
     }
-    // SMM: the Secure Boot firmware's variable store needs it.
+
     a.pair("-machine", machine);
     a.pair("-global", "driver=cfi.pflash01,property=secure,value=on");
     a.pair("-global", "ICH9-LPC.disable_s3=1");
@@ -165,13 +163,14 @@ pub fn argv(
         ),
     );
     a.pair("-m", memory.as_str());
-    // Shared memory backs the GPU's host-visible blobs.
     let mut backend = format!("memory-backend-memfd,id=mem,size={memory},share=on");
+
     match cfg.memory.hugepages {
         HugePages::Off => {},
         HugePages::Size2M => backend += ",hugetlb=on,hugetlbsize=2M,prealloc=on",
         HugePages::Size1G => backend += ",hugetlb=on,hugetlbsize=1G,prealloc=on",
     }
+
     a.pair("-object", backend);
     a.pair(
         "-drive",
@@ -185,6 +184,7 @@ pub fn argv(
         "-drive",
         option("if=pflash,format=raw,unit=1,file=", vars, ""),
     );
+
     if cfg.machine.tpm {
         a.pair("-chardev", option("socket,id=tpm,path=", &run.tpm(), ""));
         a.pair("-tpmdev", "emulator,id=tpm0,chardev=tpm");
@@ -192,17 +192,21 @@ pub fn argv(
     }
 
     let mut sata = 2;
+
     for (i, d) in cfg.disks.iter().enumerate() {
         let (driver, path) = match &d.source {
             DiskSource::Image(p) => ("file", p),
             DiskSource::Device(p) => ("host_device", p),
         };
+
         let aio = match (d.direct(), host.io_uring) {
             (false, _) => "threads",
             (true, true) => "io_uring",
             (true, false) => "native",
         };
+
         let discard = if d.discard { ",discard=unmap" } else { "" };
+
         let direct = if d.direct() { "on" } else { "off" };
         a.pair(
             "-blockdev",
@@ -212,19 +216,23 @@ pub fn argv(
                 &format!(",cache.direct={direct},aio={aio}{discard}"),
             ),
         );
+
         let format = match d.resolved_format() {
             DiskFormat::Qcow2 => "qcow2",
             DiskFormat::Raw | DiskFormat::Auto => "raw",
         };
+
         a.pair(
             "-blockdev",
             format!("driver={format},node-name=disk{i},file=disk{i}-file{discard}"),
         );
         let serial = d.serial.clone().unwrap_or_else(|| format!("loophole{i}"));
+
         let blocks = match host.block_sizes.get(i).copied().flatten() {
             Some(n) if n > 512 => format!(",logical_block_size={n},physical_block_size={n}"),
             _ => String::new(),
         };
+
         let boot = bootindex(d.boot_order);
         let addr = disk_slot(i);
         a.pair(
@@ -240,6 +248,7 @@ pub fn argv(
                         .as_deref()
                         .map(|s| format!(",serial={}", escaped(s)))
                         .unwrap_or_default();
+
                     format!("virtio-blk-pci,drive=disk{i},addr={addr:#x}{serial}{blocks}{boot}")
                 },
                 DiskBus::Sata => {
@@ -253,7 +262,7 @@ pub fn argv(
             },
         );
     }
-    // Both CD drives always exist.
+
     let drives = [
         (
             INSTALL_DRIVE,
@@ -269,11 +278,14 @@ pub fn argv(
             None,
         ),
     ];
+
     for (i, (id, media, boot)) in drives.into_iter().enumerate() {
         let mut drive = OsString::from(format!("if=none,id=cd{i},media=cdrom,readonly=on"));
+
         if let Some(path) = media {
             drive.push(option(",file=", path, ""));
         }
+
         a.pair("-drive", drive);
         a.pair(
             "-device",
@@ -282,17 +294,19 @@ pub fn argv(
     }
 
     if cfg.nics.is_empty() {
-        // QEMU adds a NIC of its own unless given -nic none.
         a.pair("-nic", "none");
     }
+
     for (i, n) in cfg.nics.iter().enumerate() {
         let netdev = match n.backend {
             NetBackend::User => {
                 let mut s = format!("user,id=net{i}");
+
                 for f in &n.forwards {
                     let address = f.address.map(|a| a.to_string()).unwrap_or_default();
                     s += &format!(",hostfwd={}:{address}:{}-:{}", f.proto, f.host, f.guest);
                 }
+
                 OsString::from(s)
             },
             NetBackend::Tap => OsString::from(format!(
@@ -300,11 +314,14 @@ pub fn argv(
                 escaped(n.tap.as_deref().unwrap_or_default())
             )),
         };
+
         a.pair("-netdev", netdev);
+
         let model = match n.model {
             NicModel::E1000e => "e1000e",
             NicModel::Virtio => "virtio-net-pci",
         };
+
         let mac = n.mac.map(|m| format!(",mac={m}")).unwrap_or_default();
         a.pair(
             "-device",
@@ -316,9 +333,11 @@ pub fn argv(
         "-device",
         format!("qemu-xhci,id=xhci,addr={:#x}", slot::XHCI),
     );
+
     if cfg.input.tablet {
         a.pair("-device", "usb-tablet,bus=xhci.0");
     }
+
     for u in &cfg.usb {
         a.pair(
             "-device",
@@ -328,6 +347,7 @@ pub fn argv(
             ),
         );
     }
+
     for (i, p) in cfg.pci.iter().enumerate() {
         a.pair(
             "-device",
@@ -337,6 +357,7 @@ pub fn argv(
                 slot::ROOT_PORTS + i as u32
             ),
         );
+
         let rombar = if p.rom_bar { "" } else { ",rombar=0" };
         a.pair(
             "-device",
@@ -356,12 +377,14 @@ pub fn argv(
     a.pair("-serial", option("file:", &run.serial(), ""));
     a.pair("-monitor", "none");
     a.pair("-pidfile", run.pid());
+
     if cfg.boot.menu {
         a.pair(
             "-boot",
             format!("menu=on,splash-time={}", cfg.boot.menu_timeout_ms),
         );
     }
+
     a.pair(
         "-display",
         option("dbus,p2p=on,gl=on,rendernode=", host.render_node, ""),
@@ -375,13 +398,16 @@ pub fn argv(
             slot::GPU
         ),
     );
+
     if cfg.sound.enabled {
         let name = escaped(&cfg.name);
+
         let backend = match (host.pipewire, cfg.sound.microphone) {
             (false, _) => "none".to_owned(),
             (true, false) => format!("pipewire,out.stream-name={name}"),
             (true, true) => format!("pipewire,out.stream-name={name},in.stream-name={name}"),
         };
+
         a.pair("-audiodev", format!("{backend},id=snd0"));
         a.pair("-device", format!("ich9-intel-hda,addr={:#x}", slot::HDA));
         a.pair(
@@ -393,6 +419,7 @@ pub fn argv(
             },
         );
     }
+
     a.0.extend(cfg.machine.extra_args.iter().map(OsString::from));
     a.0
 }

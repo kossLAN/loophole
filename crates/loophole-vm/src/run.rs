@@ -20,6 +20,7 @@ pub fn running_pid(name: &str) -> Option<i32> {
     let pid: i32 = fs::read_to_string(run.pid()).ok()?.trim().parse().ok()?;
     let cmdline = fs::read(format!("/proc/{pid}/cmdline")).ok()?;
     let dir = run.dir.to_string_lossy();
+
     String::from_utf8_lossy(&cmdline)
         .contains(dir.as_ref())
         .then_some(pid)
@@ -35,35 +36,39 @@ pub fn create_disk(tools: &Tools, path: &Path, gib: u32) -> Result<()> {
     if path.exists() {
         bail!("{} exists already", path.display());
     }
+
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
     }
+
     let out = Command::new(&tools.qemu_img)
         .args(["create", "-q", "-f", "qcow2"])
         .arg(path)
         .arg(format!("{gib}G"))
         .output()
         .context("running qemu-img")?;
+
     if !out.status.success() {
         bail!(
             "qemu-img create: {}",
             String::from_utf8_lossy(&out.stderr).trim()
         );
     }
+
     Ok(())
 }
 
 pub fn memlock_needed(cfg: &VmConfig) -> u64 {
-    // virtio-gpu maps its blobs as guest RAM, which VFIO pins as well.
     (u64::from(cfg.memory.size_gib) + u64::from(cfg.gpu.window_gib) + 1) << 30
 }
 
-// What this host must give the definition before it can start.
 pub fn preflight(cfg: &VmConfig) -> Vec<Issue> {
     let mut out = Vec::new();
     let mut err = |s, m: String| out.push(Issue::error(s, m));
+
     for (i, d) in cfg.disks.iter().enumerate() {
         let section = Section::Disk(i);
+
         match &d.source {
             DiskSource::Image(p) => {
                 if !p.as_os_str().is_empty() && !p.is_file() {
@@ -72,6 +77,7 @@ pub fn preflight(cfg: &VmConfig) -> Vec<Issue> {
             },
             DiskSource::Device(p) => {
                 let is_block = fs::metadata(p).is_ok_and(|m| m.file_type().is_block_device());
+
                 if !is_block {
                     err(
                         section,
@@ -79,12 +85,15 @@ pub fn preflight(cfg: &VmConfig) -> Vec<Issue> {
                     );
                     continue;
                 }
+
                 let Some(dev) = host::block_device(p) else {
                     continue;
                 };
+
                 if let Some(why) = &dev.in_use {
                     err(section, format!("{} is {why} on the host", p.display()));
                 }
+
                 if !dev.accessible {
                     err(
                         section,
@@ -94,7 +103,7 @@ pub fn preflight(cfg: &VmConfig) -> Vec<Issue> {
                         ),
                     );
                 }
-                // ide-hd only has 512-byte sectors.
+
                 if d.bus == DiskBus::Sata && dev.logical_block != 512 {
                     err(
                         section,
@@ -107,13 +116,16 @@ pub fn preflight(cfg: &VmConfig) -> Vec<Issue> {
             },
         }
     }
+
     if let Some(iso) = &cfg.media.install
         && !iso.is_file()
     {
         err(Section::Media, format!("{} does not exist", iso.display()));
     }
+
     for (i, p) in cfg.pci.iter().enumerate() {
         let status = host::passthrough(p.address);
+
         if status != Passthrough::Ready {
             err(
                 Section::Pci(i),
@@ -121,8 +133,10 @@ pub fn preflight(cfg: &VmConfig) -> Vec<Issue> {
             );
         }
     }
+
     if !cfg.pci.is_empty() {
         let need = memlock_needed(cfg);
+
         if let Some(limit) = host::memlock()
             && limit < need
         {
@@ -136,12 +150,15 @@ pub fn preflight(cfg: &VmConfig) -> Vec<Issue> {
             );
         }
     }
+
     if cfg.memory.hugepages != HugePages::Off {
         let page = match cfg.memory.hugepages {
             HugePages::Size1G => 1 << 30,
             HugePages::Size2M | HugePages::Off => 2 << 20,
         };
+
         let need = u64::from(cfg.memory.size_gib) << 30;
+
         match host::hugepages(cfg.memory.hugepages) {
             Some((_, free)) if free * page >= need => {},
             Some((_, free)) => err(
@@ -159,11 +176,14 @@ pub fn preflight(cfg: &VmConfig) -> Vec<Issue> {
             ),
         }
     }
+
     let taps = host::taps();
+
     for (i, n) in cfg.nics.iter().enumerate() {
         let Some(name) = n.tap.as_ref().filter(|_| n.backend == NetBackend::Tap) else {
             continue;
         };
+
         match taps.iter().find(|t| t.name == *name) {
             None => err(Section::Nic(i), format!("there is no TAP device {name}")),
             Some(t) if !t.accessible => err(
@@ -173,7 +193,9 @@ pub fn preflight(cfg: &VmConfig) -> Vec<Issue> {
             Some(_) => {},
         }
     }
+
     let usb = host::usb_devices();
+
     for (i, u) in cfg.usb.iter().enumerate() {
         match usb.iter().find(|d| d.id == u.id) {
             None => out.push(Issue::warning(
@@ -190,14 +212,15 @@ pub fn preflight(cfg: &VmConfig) -> Vec<Issue> {
             Some(_) => {},
         }
     }
+
     out
 }
 
 fn detached(cmd: &mut Command, memlock: bool) -> &mut Command {
-    // SAFETY: setsid and setrlimit are async-signal-safe and touch no memory of ours.
     unsafe {
         cmd.pre_exec(move || {
             rustix::process::setsid().map_err(std::io::Error::from)?;
+
             if memlock {
                 let max = rustix::process::getrlimit(Resource::Memlock).maximum;
                 let _ = rustix::process::setrlimit(
@@ -208,6 +231,7 @@ fn detached(cmd: &mut Command, memlock: bool) -> &mut Command {
                     },
                 );
             }
+
             Ok(())
         })
     }
@@ -220,11 +244,14 @@ fn wait_for_socket(
     alive: &mut dyn FnMut() -> Result<()>,
 ) -> Result<()> {
     let deadline = Instant::now() + timeout;
+
     loop {
         alive()?;
+
         if UnixStream::connect(path).is_ok() {
             return Ok(());
         }
+
         if Instant::now() > deadline {
             bail!(
                 "{what} did not open {} in {} s",
@@ -232,6 +259,7 @@ fn wait_for_socket(
                 timeout.as_secs()
             );
         }
+
         std::thread::sleep(Duration::from_millis(50));
     }
 }
@@ -254,20 +282,24 @@ fn start_tpm(cfg: &VmConfig, tools: &Tools, run: &RunPaths) -> Result<()> {
         .stdin(Stdio::null())
         .status()
         .context("starting swtpm")?;
+
     if !status.success() {
         bail!(
             "swtpm failed ({status}): {}",
             fs::read_to_string(run.tpm_log()).unwrap_or_default().trim()
         );
     }
-    // swtpm serves one client.
+
     let deadline = Instant::now() + Duration::from_secs(5);
+
     while !run.tpm().exists() {
         if Instant::now() > deadline {
             bail!("swtpm did not create {}", run.tpm().display());
         }
+
         std::thread::sleep(Duration::from_millis(20));
     }
+
     Ok(())
 }
 
@@ -276,6 +308,7 @@ fn stop_tpm(run: &RunPaths) {
         .ok()
         .and_then(|p| p.trim().parse::<i32>().ok())
         .and_then(rustix::process::Pid::from_raw);
+
     if let Some(pid) = pid {
         let _ = rustix::process::kill_process(pid, rustix::process::Signal::TERM);
     }
@@ -284,19 +317,22 @@ fn stop_tpm(run: &RunPaths) {
 fn ensure_vars(cfg: &VmConfig, tools: &Tools) -> Result<PathBuf> {
     let data = dirs::data_dir(&cfg.name);
     fs::create_dir_all(&data)?;
+
     let vars = data.join("OVMF_VARS.fd");
+
     if !vars.exists() {
         fs::copy(&tools.ovmf_vars, &vars).context("copying the UEFI variables")?;
         fs::set_permissions(&vars, fs::Permissions::from_mode(0o600))?;
     }
+
     Ok(vars)
 }
 
-// Starts QEMU detached and waits until its control socket answers. The caller reaps the child.
 pub fn start(cfg: &VmConfig, tools: &Tools) -> Result<Child> {
     if running_pid(&cfg.name).is_some() {
         bail!("{} is running already", cfg.name);
     }
+
     let problems: Vec<String> = cfg
         .validate()
         .into_iter()
@@ -304,14 +340,18 @@ pub fn start(cfg: &VmConfig, tools: &Tools) -> Result<Child> {
         .filter(|i| i.fatal)
         .map(|i| i.message)
         .collect();
+
     if !problems.is_empty() {
-        bail!("{}", problems.join(" · "));
+        bail!("{}", problems.join("  "));
     }
+
     let nodes = host::render_nodes();
     let gpu = host::gpu(&nodes).context("no amdgpu render node (/dev/dri/renderD*)")?;
     let vars = ensure_vars(cfg, tools)?;
     let run = RunPaths::new(&cfg.name);
+
     fs::create_dir_all(&run.dir)?;
+
     for stale in [
         run.control(),
         run.qmp(),
@@ -325,6 +365,7 @@ pub fn start(cfg: &VmConfig, tools: &Tools) -> Result<Child> {
     if cfg.machine.tpm {
         start_tpm(cfg, tools, &run)?;
     }
+
     let block_sizes: Vec<Option<u32>> = cfg
         .disks
         .iter()
@@ -339,6 +380,7 @@ pub fn start(cfg: &VmConfig, tools: &Tools) -> Result<Child> {
         io_uring: host::io_uring(),
         block_sizes: &block_sizes,
     };
+
     let argv = argv(cfg, tools, &run, &vars, &host);
     let log = fs::File::create(run.log())?;
     let spawned = detached(
@@ -352,6 +394,7 @@ pub fn start(cfg: &VmConfig, tools: &Tools) -> Result<Child> {
     )
     .spawn()
     .with_context(|| format!("starting {}", argv[0].to_string_lossy()));
+
     let mut child = match spawned {
         Ok(child) => child,
         Err(e) => {
@@ -359,15 +402,18 @@ pub fn start(cfg: &VmConfig, tools: &Tools) -> Result<Child> {
             return Err(e);
         },
     };
+
     let mut alive = || match child.try_wait()? {
         Some(status) => bail!("QEMU exited ({status}):\n{}", log_tail(&cfg.name, 20)),
         None => Ok(()),
     };
+
     if let Err(e) = wait_for_socket(&run.control(), "QEMU", Duration::from_secs(30), &mut alive) {
         let _ = child.kill();
         let _ = child.wait();
         stop_tpm(&run);
         return Err(e);
     }
+
     Ok(child)
 }

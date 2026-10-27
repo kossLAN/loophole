@@ -9,7 +9,6 @@ pub struct Dmabuf {
     pub modifier: u64,
 }
 
-// The same buffer across the fresh fds QEMU sends for it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BufferKey {
     dev: u64,
@@ -26,6 +25,7 @@ impl Dmabuf {
     pub fn key(&self) -> Option<BufferKey> {
         let (fd, offset, stride) = self.planes.first()?;
         let st = rustix::fs::fstat(fd.as_ref()).ok()?;
+
         Some(BufferKey {
             dev: st.st_dev,
             ino: st.st_ino,

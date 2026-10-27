@@ -1,0 +1,37 @@
+import { Theme } from "../theme.slint";
+import { Icons } from "../icons.slint";
+import { Icon } from "base.slint";
+
+export component StatusBar inherits Rectangle {
+    in property <string> message;
+    in property <string> hint;
+
+    height: 28px;
+    background: Theme.sidebar;
+    Rectangle {
+        y: 0px;
+        height: 1px;
+        background: Theme.border;
+    }
+    HorizontalLayout {
+        padding-left: Theme.space-4;
+        padding-right: Theme.space-4;
+        spacing: 8px;
+        if root.message != "": VerticalLayout {
+            alignment: center;
+            Icon {
+                source: Icons.circle-alert;
+                size: 14px;
+                color: Theme.danger;
+            }
+        }
+        Text {
+            text: root.message != "" ? root.message : root.hint;
+            color: root.message != "" ? Theme.danger : Theme.muted;
+            font-size: Theme.font-sm;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+    }
+}

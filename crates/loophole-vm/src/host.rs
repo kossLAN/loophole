@@ -11,7 +11,6 @@ pub struct RenderNode {
     pub path: PathBuf,
     pub driver: String,
     pub vram: Option<u64>,
-    // PCI address with vendor and device id, e.g. "0000:03:00.0 [1002:7550]".
     pub description: String,
 }
 
@@ -40,6 +39,7 @@ impl Sys {
 
     fn number(&self, rel: impl AsRef<Path>) -> Option<u64> {
         let text = self.read(rel)?;
+
         text.strip_prefix("0x").map_or_else(
             || text.parse().ok(),
             |hex| u64::from_str_radix(hex, 16).ok(),
@@ -75,6 +75,7 @@ impl Sys {
     fn udev(&self, id: &str, key: &str) -> Option<String> {
         let text = self.read(format!("/run/udev/data/{id}"))?;
         let prefix = format!("E:{key}=");
+
         text.lines()
             .find_map(|l| l.strip_prefix(&prefix))
             .map(String::from)
@@ -91,6 +92,7 @@ fn render_nodes_in(sys: &Sys) -> Vec<RenderNode> {
         .filter(|n| n.starts_with("renderD"))
         .map(|n| {
             let dev = format!("/sys/class/drm/{n}/device");
+
             let ids = match (
                 sys.read(format!("{dev}/vendor")),
                 sys.read(format!("{dev}/device")),
@@ -102,6 +104,7 @@ fn render_nodes_in(sys: &Sys) -> Vec<RenderNode> {
                 ),
                 _ => String::new(),
             };
+
             RenderNode {
                 path: Path::new("/dev/dri").join(&n),
                 driver: sys
@@ -152,12 +155,12 @@ pub fn block_devices() -> Vec<BlockDevice> {
 
 pub fn block_device(path: &Path) -> Option<BlockDevice> {
     let node = fs::canonicalize(path).ok()?;
+
     block_devices()
         .into_iter()
         .find(|d| d.node == node || d.path == path)
 }
 
-// Model and serial names first, then WWN and EUI ones.
 fn by_id_rank(name: &str) -> u8 {
     u8::from(name.starts_with("wwn-") || name.contains("-eui.") || name.starts_with("nvme-nvme."))
 }
@@ -172,6 +175,7 @@ fn block_devices_in(sys: &Sys) -> Vec<BlockDevice> {
     let mounts = sys.read("/proc/mounts").unwrap_or_default();
     let swaps = sys.read("/proc/swaps").unwrap_or_default();
     let skip = ["loop", "ram", "zram", "dm-", "md", "sr", "nbd"];
+
     sys.list("/sys/block")
         .into_iter()
         .filter(|n| !skip.iter().any(|s| n.starts_with(s)))
@@ -199,6 +203,7 @@ fn block_devices_in(sys: &Sys) -> Vec<BlockDevice> {
                 let mut fields = l.split_whitespace();
                 let (dev, at) = (fields.next()?, fields.next()?);
                 let dev = dev.strip_prefix("/dev/")?;
+
                 nodes
                     .iter()
                     .any(|n| n == dev)
@@ -206,6 +211,7 @@ fn block_devices_in(sys: &Sys) -> Vec<BlockDevice> {
             });
             let swap = swaps.lines().skip(1).find_map(|l| {
                 let dev = l.split_whitespace().next()?.strip_prefix("/dev/")?;
+
                 nodes
                     .iter()
                     .any(|n| n == dev)
@@ -217,9 +223,11 @@ fn block_devices_in(sys: &Sys) -> Vec<BlockDevice> {
                 } else {
                     format!("{block}/{n}/holders")
                 };
+
                 let holders = sys.list(dir);
                 (!holders.is_empty()).then(|| format!("in use by {}", holders.join(", ")))
             });
+
             BlockDevice {
                 model: sys
                     .read(format!("{block}/device/model"))
@@ -260,17 +268,19 @@ pub fn pci_devices() -> Vec<PciDevice> {
 fn usb_products(sys: &Sys, dir: &str, out: &mut Vec<String>) {
     for entry in sys.list(dir) {
         let path = format!("{dir}/{entry}");
+
         if !entry.contains('-') || entry.contains(':') {
             continue;
         }
+
         if let Some(product) = sys.read(format!("{path}/product")) {
             out.push(product);
         }
+
         usb_products(sys, &path, out);
     }
 }
 
-// Storage, network, display, multimedia, communication, input, serial bus and wireless controllers.
 const PASSABLE: [u32; 8] = [0x01, 0x02, 0x03, 0x04, 0x07, 0x09, 0x0c, 0x0d];
 const SMBUS: u32 = 0x0c05;
 
@@ -281,15 +291,18 @@ fn pci_devices_in(sys: &Sys) -> Vec<PciDevice> {
             let address: PciAddress = bdf.parse().ok()?;
             let dir = format!("/sys/bus/pci/devices/{bdf}");
             let class = u32::try_from(sys.number(format!("{dir}/class"))?).ok()?;
+
             if !PASSABLE.contains(&(class >> 16)) || class >> 8 == SMBUS {
                 return None;
             }
+
             let id = |f: &str| {
                 let v = sys.number(format!("{dir}/{f}"))?;
                 u16::try_from(v).ok()
             };
             let (vendor, device) = (id("vendor")?, id("device")?);
             let udev = format!("+pci:{bdf}");
+
             let name = match (
                 sys.udev(&udev, "ID_VENDOR_FROM_DATABASE"),
                 sys.udev(&udev, "ID_MODEL_FROM_DATABASE"),
@@ -298,7 +311,9 @@ fn pci_devices_in(sys: &Sys) -> Vec<PciDevice> {
                 (None, Some(m)) => m,
                 _ => format!("{vendor:04x}:{device:04x}"),
             };
+
             let mut contents = Vec::new();
+
             for ctrl in sys.list(format!("{dir}/nvme")) {
                 contents.extend(
                     sys.list(format!("{dir}/nvme/{ctrl}"))
@@ -306,9 +321,11 @@ fn pci_devices_in(sys: &Sys) -> Vec<PciDevice> {
                         .filter(|n| n.starts_with(&ctrl) && n.contains('n')),
                 );
             }
+
             for bus in sys.list(&dir).into_iter().filter(|e| e.starts_with("usb")) {
                 usb_products(sys, &format!("{dir}/{bus}"), &mut contents);
             }
+
             Some(PciDevice {
                 address,
                 vendor,
@@ -364,20 +381,27 @@ pub fn passthrough(address: PciAddress) -> Passthrough {
 
 fn passthrough_in(sys: &Sys, address: PciAddress) -> Passthrough {
     let dir = format!("/sys/bus/pci/devices/{address}");
+
     if !sys.exists(&dir) {
         return Passthrough::Missing;
     }
+
     let bdf = address.to_string();
+
     if gpu(&render_nodes_in(sys)).is_some_and(|n| n.description.starts_with(&bdf)) {
         return Passthrough::RenderGpu;
     }
+
     let Some(group) = sys.link_name(format!("{dir}/iommu_group")) else {
         return Passthrough::NoIommu;
     };
+
     let driver = sys.link_name(format!("{dir}/driver"));
+
     if driver.as_deref() != Some("vfio-pci") {
         return Passthrough::NotVfio(driver);
     }
+
     let blockers: Vec<String> = sys
         .list(format!("/sys/kernel/iommu_groups/{group}/devices"))
         .into_iter()
@@ -387,14 +411,17 @@ fn passthrough_in(sys: &Sys, address: PciAddress) -> Passthrough {
             (!VFIO_DRIVERS.contains(&d.as_str())).then(|| format!("{other} ({d})"))
         })
         .collect();
+
     if !blockers.is_empty() {
         return Passthrough::GroupShared(blockers);
     }
+
     for dev in ["/dev/vfio/vfio".to_owned(), format!("/dev/vfio/{group}")] {
         if !sys.accessible(&dev) {
             return Passthrough::NoAccess(dev.into());
         }
     }
+
     Passthrough::Ready
 }
 
@@ -407,6 +434,7 @@ pub struct UsbDevice {
 
 pub fn usb_devices() -> Vec<UsbDevice> {
     let sys = Sys::default();
+
     sys.list("/sys/bus/usb/devices")
         .into_iter()
         .filter_map(|e| {
@@ -418,9 +446,11 @@ pub fn usb_devices() -> Vec<UsbDevice> {
             )
             .parse()
             .ok()?;
+
             if id.vendor == 0x1d6b {
                 return None;
             }
+
             let name = [
                 sys.read(format!("{dir}/manufacturer")),
                 sys.read(format!("{dir}/product")),
@@ -434,6 +464,7 @@ pub fn usb_devices() -> Vec<UsbDevice> {
                 sys.number(format!("{dir}/busnum")).unwrap_or(0),
                 sys.number(format!("{dir}/devnum")).unwrap_or(0)
             );
+
             Some(UsbDevice {
                 id,
                 name: if name.is_empty() {
@@ -451,11 +482,9 @@ pub fn usb_devices() -> Vec<UsbDevice> {
 pub struct Tap {
     pub name: String,
     pub bridge: Option<String>,
-    // QEMU, as this user, may attach to it.
     pub accessible: bool,
 }
 
-// IFF_TAP in tun_flags.
 const IFF_TAP: u64 = 0x2;
 
 pub fn taps() -> Vec<Tap> {
@@ -467,6 +496,7 @@ pub fn taps() -> Vec<Tap> {
         .chain([rustix::process::getgid()])
         .map(|g| u64::from(g.as_raw()))
         .collect();
+
     sys.list("/sys/class/net")
         .into_iter()
         .filter(|n| {
@@ -474,9 +504,9 @@ pub fn taps() -> Vec<Tap> {
                 .is_some_and(|f| f & IFF_TAP != 0)
         })
         .map(|name| {
-            // -1 (unparsed here) when unset: only root may attach then.
             let owner = sys.number(format!("/sys/class/net/{name}/owner"));
             let group = sys.number(format!("/sys/class/net/{name}/group"));
+
             Tap {
                 bridge: sys.link_name(format!("/sys/class/net/{name}/master")),
                 accessible: owner == Some(uid) || group.is_some_and(|g| gids.contains(&g)),
@@ -486,27 +516,26 @@ pub fn taps() -> Vec<Tap> {
         .collect()
 }
 
-// Hard memlock limit in bytes. None is unlimited.
 pub fn memlock() -> Option<u64> {
     rustix::process::getrlimit(Resource::Memlock).maximum
 }
 
-// Bytes free to unprivileged users on the filesystem holding `path` or its nearest existing parent.
 pub fn free_space(path: &Path) -> Option<u64> {
     let dir = path.ancestors().find(|p| p.exists())?;
     let st = rustix::fs::statvfs(dir).ok()?;
     Some(st.f_bavail.saturating_mul(st.f_frsize))
 }
 
-// (total, free) pages of the pool.
 pub fn hugepages(size: HugePages) -> Option<(u64, u64)> {
     let kb = match size {
         HugePages::Off => return None,
         HugePages::Size2M => 2048,
         HugePages::Size1G => 1 << 20,
     };
+
     let sys = Sys::default();
     let dir = format!("/sys/kernel/mm/hugepages/hugepages-{kb}kB");
+
     Some((
         sys.number(format!("{dir}/nr_hugepages"))?,
         sys.number(format!("{dir}/free_hugepages"))?,
@@ -515,6 +544,7 @@ pub fn hugepages(size: HugePages) -> Option<(u64, u64)> {
 
 pub fn memory_total() -> u64 {
     let meminfo = Sys::default().read("/proc/meminfo").unwrap_or_default();
+
     meminfo
         .lines()
         .find_map(|l| l.strip_prefix("MemTotal:"))
@@ -541,6 +571,7 @@ pub fn checks() -> Vec<Check> {
     let groups = sys.list("/sys/kernel/iommu_groups").len();
     let vfio = sys.exists("/sys/bus/pci/drivers/vfio-pci");
     let memlock = memlock();
+
     vec![
         Check {
             what: "KVM",

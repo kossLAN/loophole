@@ -1,0 +1,277 @@
+import { Theme } from "../theme.slint";
+import { Icons } from "../icons.slint";
+import { VmItem } from "../state.slint";
+import {
+    Button, ButtonKind, Confirm, IconButton, Notice, ScrollArea, StatusBar, StatusDot, Tone,
+} from "../components/index.slint";
+
+component VmRow inherits Rectangle {
+    in property <VmItem> vm;
+    in property <bool> selected;
+    callback clicked();
+    callback double-clicked();
+
+    height: Theme.row-h;
+    border-radius: Theme.radius-md;
+    background: root.selected ? Theme.light : touch.has-hover ? Theme.hover : transparent;
+    accessible-role: list-item;
+    accessible-label: root.vm.name;
+    accessible-item-selectable: true;
+    accessible-item-selected: root.selected;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 14px;
+        spacing: 12px;
+        VerticalLayout {
+            alignment: center;
+            StatusDot {
+                state: root.vm.state;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.vm.name;
+                color: Theme.fg;
+                font-size: Theme.font-md;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                text: root.vm.windows;
+                color: Theme.muted;
+                font-size: Theme.font-xs;
+                overflow: elide;
+            }
+        }
+        Text {
+            text: root.vm.state + (root.vm.summary != "" ? "  " + root.vm.summary : "");
+            color: Theme.muted;
+            font-size: Theme.font-sm;
+            vertical-alignment: center;
+        }
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+        double-clicked => { root.double-clicked(); }
+    }
+}
+
+component ToolbarGap inherits VerticalLayout {
+    alignment: center;
+    padding-left: Theme.space-2;
+    padding-right: Theme.space-2;
+    Rectangle {
+        width: 1px;
+        height: 20px;
+        background: Theme.border;
+    }
+}
+
+export component VmListWindow inherits Window {
+    in property <[VmItem]> vms;
+    in-out property <int> selected: -1;
+    in property <string> message;
+    in property <string> host-problem;
+
+    in-out property <bool> confirm-open;
+    in property <string> confirm-title;
+    in property <string> confirm-text;
+    in property <string> confirm-action;
+
+    callback new-vm();
+    callback start-vm();
+    callback shutdown();
+    callback force-off();
+    callback open-viewer();
+    callback open-settings();
+    callback remove-vm();
+    callback about();
+    callback confirmed();
+
+    property <VmItem> current: root.selected >= 0 && root.selected < root.vms.length ? root.vms[root.selected] : { name: "", state: "" };
+    property <bool> has-current: root.current.name != "";
+
+    title: "loophole";
+    background: Theme.bg;
+    preferred-width: 760px;
+    preferred-height: 520px;
+    min-width: 520px;
+    min-height: 320px;
+    default-font-size: Theme.font-md;
+
+    VerticalLayout {
+        Rectangle {
+            height: Theme.header-h;
+            background: Theme.bg;
+            Rectangle {
+                y: parent.height - 1px;
+                height: 1px;
+                background: Theme.border;
+            }
+            HorizontalLayout {
+                padding-left: Theme.space-4;
+                padding-right: Theme.space-4;
+                spacing: Theme.space-1;
+                VerticalLayout {
+                    alignment: center;
+                    Button {
+                        text: "New VM";
+                        icon: Icons.plus;
+                        kind: ButtonKind.primary;
+                        clicked => { root.new-vm(); }
+                    }
+                }
+                ToolbarGap { }
+                VerticalLayout {
+                    alignment: center;
+                    IconButton {
+                        icon: Icons.play;
+                        tooltip: "Start";
+                        enabled: root.current.state == "stopped";
+                        clicked => { root.start-vm(); }
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    IconButton {
+                        icon: Icons.power;
+                        tooltip: "Shut down";
+                        enabled: root.current.running;
+                        clicked => { root.shutdown(); }
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    IconButton {
+                        icon: Icons.power-off;
+                        tooltip: "Force off";
+                        kind: ButtonKind.danger;
+                        enabled: root.current.running;
+                        clicked => { root.force-off(); }
+                    }
+                }
+                ToolbarGap { }
+                VerticalLayout {
+                    alignment: center;
+                    IconButton {
+                        icon: Icons.monitor;
+                        tooltip: "Open viewer";
+                        enabled: root.has-current;
+                        clicked => { root.open-viewer(); }
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    IconButton {
+                        icon: Icons.sliders-horizontal;
+                        tooltip: "Settings";
+                        enabled: root.has-current;
+                        clicked => { root.open-settings(); }
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    IconButton {
+                        icon: Icons.trash-2;
+                        tooltip: "Remove VM…";
+                        kind: ButtonKind.danger;
+                        enabled: root.current.state == "stopped";
+                        clicked => { root.remove-vm(); }
+                    }
+                }
+                Rectangle {
+                    horizontal-stretch: 1;
+                }
+                VerticalLayout {
+                    alignment: center;
+                    IconButton {
+                        icon: Icons.info;
+                        tooltip: "About";
+                        clicked => { root.about(); }
+                    }
+                }
+            }
+        }
+
+        VerticalLayout {
+            vertical-stretch: 1;
+            padding: Theme.space-3;
+            spacing: Theme.space-3;
+
+            if root.host-problem != "": Notice {
+                title: "VMs cannot run here";
+                text: root.host-problem;
+                tone: Tone.danger;
+                vertical-stretch: 0;
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                background: Theme.surface;
+                border-radius: Theme.radius-lg;
+                border-width: 1px;
+                border-color: Theme.light;
+
+                if root.vms.length == 0: VerticalLayout {
+                    alignment: center;
+                    spacing: Theme.space-4;
+                    Text {
+                        text: "No VMs yet";
+                        color: Theme.fg;
+                        font-size: Theme.font-xl;
+                        font-weight: 600;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "Create one from a Windows 11 ISO";
+                        color: Theme.muted;
+                        horizontal-alignment: center;
+                    }
+                    HorizontalLayout {
+                        alignment: center;
+                        Button {
+                            text: "New VM";
+                            icon: Icons.plus;
+                            kind: ButtonKind.primary;
+                            clicked => { root.new-vm(); }
+                        }
+                    }
+                }
+
+                if root.vms.length > 0: ScrollArea {
+                    VerticalLayout {
+                        alignment: start;
+                        padding: 4px;
+                        spacing: 2px;
+                        for vm[i] in root.vms: VmRow {
+                            vm: vm;
+                            selected: i == root.selected;
+                            clicked => { root.selected = i; }
+                            double-clicked => {
+                                root.selected = i;
+                                root.open-viewer();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if root.message != "": StatusBar {
+            message: root.message;
+        }
+    }
+
+    if root.confirm-open: Confirm {
+        title: root.confirm-title;
+        text: root.confirm-text;
+        action: root.confirm-action;
+        confirmed => { root.confirmed(); }
+        close => { root.confirm-open = false; }
+    }
+}

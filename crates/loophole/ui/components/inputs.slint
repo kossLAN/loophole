@@ -87,34 +87,39 @@ export component TextArea inherits Field {
     height: root.rows-height;
     horizontal-stretch: 1;
     focused: input.has-focus;
-    clip: true;
     accessible-role: text-input;
     accessible-value: root.text;
 
-    input := TextInput {
+    Rectangle {
         x: 10px;
         y: 8px;
         width: parent.width - 20px;
         height: parent.height - 16px;
-        single-line: false;
-        wrap: word-wrap;
-        text <=> root.text;
-        enabled: root.enabled;
-        read-only: root.read-only;
-        color: root.enabled ? Theme.fg : Theme.subtle;
-        font-size: Theme.font-md;
-        font-family: root.mono ? Theme.mono : "";
-        selection-background-color: Theme.selection;
-        selection-foreground-color: Theme.fg;
-    }
+        clip: true;
 
-    if root.text == "": Text {
-        x: 10px;
-        y: 8px;
-        text: root.placeholder;
-        color: Theme.subtle;
-        font-size: Theme.font-md;
-        font-family: root.mono ? Theme.mono : "";
+        input := TextInput {
+            width: parent.width;
+            height: parent.height;
+            single-line: false;
+            wrap: word-wrap;
+            text <=> root.text;
+            enabled: root.enabled;
+            read-only: root.read-only;
+            color: root.enabled ? Theme.fg : Theme.subtle;
+            font-size: Theme.font-md;
+            font-family: root.mono ? Theme.mono : "";
+            selection-background-color: Theme.selection;
+            selection-foreground-color: Theme.fg;
+        }
+
+        if root.text == "": Text {
+            x: 0px;
+            y: 0px;
+            text: root.placeholder;
+            color: Theme.subtle;
+            font-size: Theme.font-md;
+            font-family: root.mono ? Theme.mono : "";
+        }
     }
 }
 
@@ -211,8 +216,7 @@ export component NumberField inherits HorizontalLayout {
                 vertical-alignment: center;
             }
             VerticalLayout {
-                padding-top: 2px;
-                padding-bottom: 2px;
+                alignment: center;
                 IconButton {
                     icon: Icons.chevron-up;
                     size: 14px;
@@ -236,6 +240,8 @@ export component Switch inherits HorizontalLayout {
     in property <string> label;
     callback toggled(bool);
 
+    property <float> dim: root.enabled ? 0 : 0.6;
+
     function toggle() {
         root.checked = !root.checked;
         root.toggled(root.checked);
@@ -247,8 +253,7 @@ export component Switch inherits HorizontalLayout {
         width: 36px;
         height: 18px;
         border-radius: 9px;
-        background: root.checked ? Theme.accent : Theme.light;
-        opacity: root.enabled ? 1 : 0.4;
+        background: (root.checked ? Theme.accent : Theme.light).transparentize(root.dim);
         border-width: focus.has-focus ? 1px : 0px;
         border-color: Theme.accent-strong;
         accessible-role: switch;
@@ -266,7 +271,7 @@ export component Switch inherits HorizontalLayout {
             y: 2px;
             x: root.checked ? parent.width - self.width - 2px : 2px;
             border-radius: 7px;
-            background: switch-touch.has-hover ? Theme.fg.brighter(0.3) : Theme.fg;
+            background: (switch-touch.has-hover ? Theme.fg.brighter(0.3) : Theme.fg).transparentize(root.dim);
             animate x { duration: Theme.anim; easing: ease-out; }
         }
 
@@ -303,9 +308,10 @@ export component Checkbox inherits Rectangle {
         root.toggled(root.checked);
     }
 
+    property <float> dim: root.enabled ? 0 : 0.6;
+
     height: max(18px, row.preferred-height);
     min-width: row.preferred-width;
-    opacity: root.enabled ? 1 : 0.4;
     accessible-role: checkbox;
     accessible-label: root.text;
     accessible-checkable: true;
@@ -321,19 +327,19 @@ export component Checkbox inherits Rectangle {
                 width: 16px;
                 height: 16px;
                 border-radius: 4px;
-                background: root.checked ? Theme.accent : transparent;
+                background: (root.checked ? Theme.accent : transparent).transparentize(root.dim);
                 border-width: 1px;
-                border-color: root.checked || focus.has-focus ? Theme.accent : Theme.light;
+                border-color: (root.checked || focus.has-focus ? Theme.accent : Theme.light).transparentize(root.dim);
                 if root.checked: Icon {
                     source: Icons.check;
                     size: 12px;
-                    color: Theme.accent-fg;
+                    color: Theme.accent-fg.transparentize(root.dim);
                 }
             }
         }
         if root.text != "": Text {
             text: root.text;
-            color: Theme.fg;
+            color: Theme.fg.transparentize(root.dim);
             font-size: Theme.font-md;
             vertical-alignment: center;
         }
@@ -482,10 +488,11 @@ export component Segmented inherits Rectangle {
 
     height: Theme.control-h;
     border-radius: Theme.radius-sm;
-    background: Theme.bg;
+    property <float> dim: root.enabled ? 0 : 0.6;
+
+    background: Theme.bg.transparentize(root.dim);
     border-width: 1px;
-    border-color: Theme.light;
-    opacity: root.enabled ? 1 : 0.4;
+    border-color: Theme.light.transparentize(root.dim);
     accessible-role: tab-list;
 
     HorizontalLayout {
@@ -494,12 +501,12 @@ export component Segmented inherits Rectangle {
         for item[i] in root.model: Rectangle {
             min-width: label.preferred-width + 20px;
             border-radius: 4px;
-            background: i == root.current-index ? Theme.light : seg-touch.has-hover ? Theme.hover : transparent;
+            background: (i == root.current-index ? Theme.light : seg-touch.has-hover ? Theme.hover : transparent).transparentize(root.dim);
             accessible-role: AccessibleRole.tab;
             accessible-label: item;
             label := Text {
                 text: item;
-                color: i == root.current-index ? Theme.fg : Theme.muted;
+                color: (i == root.current-index ? Theme.fg : Theme.muted).transparentize(root.dim);
                 font-size: Theme.font-sm;
                 font-weight: i == root.current-index ? 600 : 400;
                 horizontal-alignment: center;
@@ -552,7 +559,6 @@ export component PathField inherits HorizontalLayout {
     }
 }
 
-// A settings row: icon, title over hint, its control on the right.
 export component FormRow inherits HorizontalLayout {
     in property <string> label;
     in property <string> hint;

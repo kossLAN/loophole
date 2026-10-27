@@ -1,0 +1,37 @@
+import { AboutSlint } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+
+export component AboutWindow inherits Window {
+    in property <string> version;
+
+    title: "About loophole";
+    background: Theme.surface;
+    width: 420px;
+    default-font-size: Theme.font-md;
+
+    VerticalLayout {
+        padding: Theme.space-5;
+        spacing: Theme.space-4;
+        VerticalLayout {
+            spacing: Theme.space-1;
+            Text {
+                text: "loophole";
+                color: Theme.fg;
+                font-size: Theme.font-xl;
+                font-weight: 700;
+            }
+            Text {
+                text: "Version " + root.version;
+                color: Theme.muted;
+                font-size: Theme.font-sm;
+            }
+        }
+        Text {
+            text: "Host client for running near native GPU accelerated Windows virtual machines on Linux.";
+            wrap: word-wrap;
+            color: Theme.muted;
+            font-size: Theme.font-md;
+        }
+        AboutSlint { }
+    }
+}

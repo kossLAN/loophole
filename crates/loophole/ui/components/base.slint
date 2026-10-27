@@ -44,20 +44,20 @@ export component Button inherits Rectangle {
     callback clicked;
 
     property <bool> has-icon: root.icon.width > 0;
-    property <color> tint: root.kind == ButtonKind.primary ? Theme.accent-fg
+    property <float> dim: root.enabled ? 0 : 0.6;
+    property <color> tint: (root.kind == ButtonKind.primary ? Theme.accent-fg
         : root.kind == ButtonKind.danger ? Theme.danger
-        : Theme.fg;
+        : Theme.fg).transparentize(root.dim);
 
     height: root.compact ? 26px : Theme.control-h;
     min-width: row.preferred-width + (root.compact ? 16px : 22px);
     border-radius: Theme.radius-md;
-    opacity: root.enabled ? 1 : 0.4;
-    background: root.kind == ButtonKind.primary ? (touch.has-hover ? root.background-hover-accent : Theme.accent)
+    background: (root.kind == ButtonKind.primary ? (touch.has-hover ? root.background-hover-accent : Theme.accent)
         : root.kind == ButtonKind.danger ? (touch.has-hover ? Theme.danger-line : Theme.danger-soft)
         : root.kind == ButtonKind.secondary ? (touch.has-hover ? Theme.raised-hover : Theme.raised)
-        : (touch.has-hover ? Theme.hover : transparent);
+        : (touch.has-hover ? Theme.hover : transparent)).transparentize(root.dim);
     border-width: root.kind == ButtonKind.secondary ? 1px : 0px;
-    border-color: focus.has-focus ? Theme.accent : Theme.light;
+    border-color: (focus.has-focus ? Theme.accent : Theme.light).transparentize(root.dim);
     accessible-role: button;
     accessible-label: root.text;
     accessible-enabled: root.enabled;
@@ -116,13 +116,14 @@ export component IconButton inherits Rectangle {
     in property <length> size: 28px;
     callback clicked;
 
+    property <float> dim: root.enabled ? 0 : 0.65;
+
     width: root.size;
     height: root.size;
     border-radius: root.size / 2;
-    opacity: root.enabled ? 1 : 0.35;
-    background: root.active ? Theme.light
+    background: (root.active ? Theme.light
         : touch.has-hover ? (root.kind == ButtonKind.danger ? Theme.danger-soft : Theme.hover)
-        : transparent;
+        : transparent).transparentize(root.dim);
     border-width: focus.has-focus ? 1px : 0px;
     border-color: Theme.accent;
     accessible-role: button;
@@ -135,7 +136,7 @@ export component IconButton inherits Rectangle {
     Icon {
         source: root.icon;
         size: root.size <= 20px ? 12px : 16px;
-        color: root.kind == ButtonKind.danger ? Theme.danger : Theme.fg;
+        color: (root.kind == ButtonKind.danger ? Theme.danger : Theme.fg).transparentize(root.dim);
     }
 
     focus := FocusScope {

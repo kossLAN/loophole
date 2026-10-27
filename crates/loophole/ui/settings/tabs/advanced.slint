@@ -1,0 +1,50 @@
+import { Theme } from "../../theme.slint";
+import { Icons } from "../../icons.slint";
+import { Edit } from "../state.slint";
+import { CardFlow, Card, FormRow, TextArea, TextField } from "../../components/index.slint";
+
+export component AdvancedTab inherits CardFlow {
+    Card {
+        title: "QEMU";
+        FormRow {
+            label: "Machine options";
+            icon: Icons.sliders-horizontal;
+            hint: "Added to -machine";
+            error: Edit.issues.machine;
+            TextField {
+                text <=> Edit.vm.machine-options;
+                placeholder: "hpet=off";
+                mono: true;
+                enabled: !Edit.locked;
+            }
+        }
+        FormRow {
+            label: "Extra arguments";
+            icon: Icons.terminal;
+            hint: "Split at spaces";
+            TextArea {
+                text <=> Edit.vm.extra-args;
+                placeholder: "-device virtio-rng-pci";
+                mono: true;
+                enabled: !Edit.locked;
+            }
+        }
+    }
+    if Edit.log != "": Card {
+        title: "Last QEMU output";
+        Rectangle {
+            background: Theme.bg;
+            border-radius: Theme.radius-sm;
+            VerticalLayout {
+                padding: Theme.space-3;
+                Text {
+                    text: Edit.log;
+                    font-family: Theme.mono;
+                    font-size: Theme.font-sm;
+                    color: Theme.log;
+                    wrap: word-wrap;
+                }
+            }
+        }
+    }
+}

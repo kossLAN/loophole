@@ -30,7 +30,6 @@ pub trait Console {
         width: u32,
         height: u32,
     ) -> zbus::Result<()>;
-    // Only loophole's QEMU has this. Others answer UnknownMethod and update every 30 ms.
     fn set_refresh_rate(&self, refresh_rate: u32) -> zbus::Result<()>;
     #[zbus(property)]
     fn label(&self) -> zbus::Result<String>;
@@ -40,12 +39,10 @@ pub trait Console {
 
 #[zbus::proxy(default_service = "org.qemu", interface = "org.qemu.Display1.Keyboard")]
 pub trait Keyboard {
-    // `keycode` is a QEMU qnum.
     fn press(&self, keycode: u32) -> zbus::Result<()>;
     fn release(&self, keycode: u32) -> zbus::Result<()>;
 }
 
-// QEMU's InputButton numbering.
 pub mod button {
     pub const LEFT: u32 = 0;
     pub const MIDDLE: u32 = 1;
@@ -61,7 +58,6 @@ pub trait Mouse {
     fn press(&self, button: u32) -> zbus::Result<()>;
     fn release(&self, button: u32) -> zbus::Result<()>;
     fn set_abs_position(&self, x: u32, y: u32) -> zbus::Result<()>;
-    // In loophole's QEMU, either call makes a pointing device of its kind the active one.
     fn rel_motion(&self, dx: i32, dy: i32) -> zbus::Result<()>;
 }
 

@@ -12,7 +12,6 @@
   libxcursor,
   libxi,
   libxrandr,
-  keymaps,
 }:
 
 rustPlatform.buildRustPackage {
@@ -51,8 +50,6 @@ rustPlatform.buildRustPackage {
     libxi
     libxrandr
   ];
-
-  env.LOOPHOLE_KEYMAPS_CSV = "${keymaps}";
 
   meta = {
     description = "Runs Windows VMs on the host's AMD GPU and shows them";

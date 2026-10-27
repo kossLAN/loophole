@@ -162,7 +162,6 @@ impl Default for Memory {
     }
 }
 
-// How much host memory the guest's GPU can map at once (virtio-gpu hostmem).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Gpu {
@@ -282,6 +281,7 @@ impl TryFrom<DiskToml> for Disk {
             (None, Some(p)) => DiskSource::Device(p),
             _ => return Err("a disk names either an image or a device".into()),
         };
+
         Ok(Self {
             source,
             bus: t.bus,
@@ -300,6 +300,7 @@ impl From<Disk> for DiskToml {
             DiskSource::Image(p) => (Some(p), None),
             DiskSource::Device(p) => (None, Some(p)),
         };
+
         Self {
             image,
             device,
@@ -318,7 +319,6 @@ impl From<Disk> for DiskToml {
 pub struct Nic {
     pub model: NicModel,
     pub backend: NetBackend,
-    // A TAP device the host set up, typically on a bridge.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tap: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -439,6 +439,7 @@ impl VmConfig {
         let mut disk = Disk::image(dirs::data_dir(name).join("disk.qcow2"));
         disk.serial = Some("loophole0".into());
         disk.boot_order = Some(1);
+
         Self {
             name: name.into(),
             cpu: Cpu::default(),
@@ -467,11 +468,13 @@ impl VmConfig {
 
     pub fn parse(name: &str, text: &str) -> Result<Self> {
         let table: toml::Table = toml::from_str(text)?;
+
         let mut cfg = if legacy::is_legacy(&table) {
             legacy::parse(table)?
         } else {
             toml::from_str::<Self>(text)?
         };
+
         cfg.name = name.into();
         Ok(cfg)
     }
@@ -480,9 +483,9 @@ impl VmConfig {
         Ok(toml::to_string(self)?)
     }
 
-    // Images in the VM's data directory go with it when it is removed.
     pub fn owned_images(&self) -> Vec<&Path> {
         let data = dirs::data_dir(&self.name);
+
         self.disks
             .iter()
             .filter_map(|d| match &d.source {
@@ -499,6 +502,7 @@ impl VmConfig {
                 || taken.iter().any(|t| t == p)
                 || self.disks.iter().any(|d| d.source.path() == p)
         };
+
         (0..64)
             .map(|i| {
                 data.join(if i == 0 {
@@ -519,9 +523,11 @@ pub fn check_name(name: &str) -> Result<()> {
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
         && !name.starts_with('.');
+
     if !ok {
         bail!("a VM name uses letters, digits, '-', '_' and '.', and does not start with '.'");
     }
+
     Ok(())
 }
 
@@ -531,18 +537,20 @@ pub fn load(name: &str) -> Result<VmConfig> {
     VmConfig::parse(name, &text).with_context(|| format!("in {}", path.display()))
 }
 
-// Broken files are reported, not skipped.
 pub fn load_all() -> Vec<Result<VmConfig>> {
     let Ok(entries) = fs::read_dir(dirs::config_dir()) else {
         return Vec::new();
     };
+
     let mut names: Vec<String> = entries
         .flatten()
         .filter_map(|entry| {
             let path = entry.path();
+
             if path.extension()? != "toml" {
                 return None;
             }
+
             path.file_stem()?.to_str().map(String::from)
         })
         .collect();
@@ -560,16 +568,17 @@ pub fn save(cfg: &VmConfig) -> Result<()> {
     fs::rename(&tmp, &path).with_context(|| format!("writing {}", path.display()))
 }
 
-// The data directory holds the UEFI variables, the TPM state and owned images. Disks elsewhere
-// stay.
 pub fn remove(cfg: &VmConfig) -> Result<()> {
     match fs::remove_file(dirs::config_dir().join(format!("{}.toml", cfg.name))) {
         Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e.into()),
         _ => {},
     }
+
     let data = dirs::data_dir(&cfg.name);
+
     if data.exists() {
         fs::remove_dir_all(&data).with_context(|| format!("removing {}", data.display()))?;
     }
+
     Ok(())
 }

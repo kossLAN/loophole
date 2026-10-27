@@ -1,0 +1,126 @@
+import { Theme } from "../theme.slint";
+import { Icons } from "../icons.slint";
+import { HostDevices, Picking } from "state.slint";
+import { Button, ButtonKind, Icon, Modal, Notice, ScrollArea, Tone } from "../components/index.slint";
+
+component PickRow inherits Rectangle {
+    in property <image> icon;
+    in property <string> title;
+    in property <string> detail;
+    in property <string> problem;
+    callback picked();
+    height: Theme.row-h + 8px;
+    border-radius: Theme.radius-md;
+    background: touch.has-hover && root.problem == "" ? Theme.light : transparent;
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 12px;
+        VerticalLayout {
+            alignment: center;
+            Icon {
+                source: root.icon;
+                size: 18px;
+                color: root.problem == "" ? Theme.fg : Theme.subtle;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            Text {
+                text: root.title;
+                color: root.problem == "" ? Theme.fg : Theme.muted;
+                font-size: Theme.font-md;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                text: root.problem != "" ? root.problem : root.detail;
+                color: root.problem != "" ? Theme.warn : Theme.muted;
+                font-size: Theme.font-sm;
+                overflow: elide;
+            }
+        }
+    }
+    touch := TouchArea {
+        enabled: root.problem == "";
+        mouse-cursor: pointer;
+        clicked => { root.picked(); }
+    }
+}
+
+export component DevicePicker inherits Modal {
+    title: HostDevices.picking == Picking.disks ? "Host disks" : HostDevices.picking == Picking.pci ? "PCI devices" : "USB devices";
+    icon: HostDevices.picking == Picking.disks ? Icons.hard-drive-download : HostDevices.picking == Picking.pci ? Icons.microchip : Icons.usb;
+    panel-width: 600px;
+    close => { HostDevices.picking = Picking.closed; }
+
+    Text {
+        text: HostDevices.picking == Picking.disks
+            ? "Raw, and not mounted on the host while the VM runs"
+            : HostDevices.picking == Picking.pci
+            ? "Leaves the host with its IOMMU group while the VM runs"
+            : "Attached at start, back to the host when the VM stops";
+        color: Theme.muted;
+        font-size: Theme.font-md;
+        wrap: word-wrap;
+    }
+    ScrollArea {
+        min-height: 120px;
+        preferred-height: 360px;
+        VerticalLayout {
+            spacing: 2px;
+            alignment: start;
+            if HostDevices.picking == Picking.disks: VerticalLayout {
+                for d in HostDevices.disks: PickRow {
+                    icon: Icons.hard-drive;
+                    title: d.title;
+                    detail: d.detail;
+                    problem: d.problem;
+                    picked => {
+                        HostDevices.add-disk(d.path);
+                        HostDevices.picking = Picking.closed;
+                    }
+                }
+            }
+            if HostDevices.picking == Picking.pci: VerticalLayout {
+                for d in HostDevices.pci: PickRow {
+                    icon: Icons.microchip;
+                    title: d.title;
+                    detail: d.detail;
+                    problem: d.problem;
+                    picked => {
+                        HostDevices.add-pci(d.address);
+                        HostDevices.picking = Picking.closed;
+                    }
+                }
+            }
+            if HostDevices.picking == Picking.usb: VerticalLayout {
+                for d in HostDevices.usb: PickRow {
+                    icon: Icons.usb;
+                    title: d.title;
+                    detail: d.id;
+                    problem: d.problem;
+                    picked => {
+                        HostDevices.add-usb(d.id);
+                        HostDevices.picking = Picking.closed;
+                    }
+                }
+            }
+        }
+    }
+    HorizontalLayout {
+        alignment: end;
+        spacing: Theme.space-2;
+        Button {
+            text: "Rescan";
+            icon: Icons.refresh-cw;
+            kind: ButtonKind.ghost;
+            clicked => { HostDevices.scan(); }
+        }
+        Button {
+            text: "Close";
+            clicked => { HostDevices.picking = Picking.closed; }
+        }
+    }
+}

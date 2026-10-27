@@ -16,7 +16,6 @@ scope.callPackage (
     rustfmt,
     pkg-config,
     fontconfig,
-    keymaps,
     loophole,
     loophole-unwrapped,
   }:
@@ -31,7 +30,6 @@ scope.callPackage (
     ];
     buildInputs = [ fontconfig ];
     env = loophole.wrapperEnv // {
-      LOOPHOLE_KEYMAPS_CSV = "${keymaps}";
       LD_LIBRARY_PATH = lib.makeLibraryPath loophole-unwrapped.runtimeDependencies;
     };
   }

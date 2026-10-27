@@ -26,6 +26,7 @@ where
     T: TryFrom<u32>,
 {
     let ok = !s.is_empty() && s.len() <= digits && s.chars().all(|c| c.is_ascii_hexdigit());
+
     ok.then(|| u32::from_str_radix(s, 16).ok())
         .flatten()
         .and_then(|v| T::try_from(v).ok())
@@ -48,20 +49,24 @@ impl FromStr for PciAddress {
         let bad = || format!("expected a PCI address such as 0000:0b:00.3 (not {s:?})");
         let (rest, function) = s.rsplit_once('.').ok_or_else(bad)?;
         let parts: Vec<&str> = rest.split(':').collect();
+
         let (domain, bus, device) = match parts.as_slice() {
             [bus, device] => ("0", *bus, *device),
             [domain, bus, device] => (*domain, *bus, *device),
             _ => return Err(bad()),
         };
+
         let addr = Self {
             domain: hex(domain, 4, "PCI domain")?,
             bus: hex(bus, 2, "PCI bus")?,
             device: hex(device, 2, "PCI device")?,
             function: hex(function, 1, "PCI function")?,
         };
+
         if addr.device > 0x1f || addr.function > 7 {
             return Err(bad());
         }
+
         Ok(addr)
     }
 }
@@ -92,6 +97,7 @@ impl FromStr for UsbId {
         let (vendor, product) = s
             .split_once(':')
             .ok_or_else(|| format!("expected a USB id such as 046d:c52b (not {s:?})"))?;
+
         Ok(Self {
             vendor: hex(vendor, 4, "USB vendor id")?,
             product: hex(product, 4, "USB product id")?,
@@ -112,7 +118,6 @@ string_serde!(UsbId);
 pub struct Mac(pub [u8; 6]);
 
 impl Mac {
-    // QEMU's own prefix, locally administered.
     pub fn random() -> Self {
         let mut tail = [0_u8; 3];
         let _ = rustix::rand::getrandom(&mut tail, rustix::rand::GetRandomFlags::empty());
@@ -126,16 +131,21 @@ impl FromStr for Mac {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bad = || format!("expected a MAC address such as 52:54:00:12:34:56 (not {s:?})");
         let parts: Vec<&str> = s.split([':', '-']).collect();
+
         if parts.len() != 6 || parts.iter().any(|p| p.len() != 2) {
             return Err(bad());
         }
+
         let mut mac = [0_u8; 6];
+
         for (out, part) in mac.iter_mut().zip(parts) {
             *out = hex(part, 2, "MAC byte")?;
         }
+
         if mac[0] & 1 != 0 {
             return Err(format!("{s} is a multicast address"));
         }
+
         Ok(Self(mac))
     }
 }
@@ -168,9 +178,11 @@ impl FromStr for Resolution {
             w.trim().parse().map_err(|_| bad())?,
             h.trim().parse().map_err(|_| bad())?,
         );
+
         if !(64..=MAX_SIDE).contains(&width) || !(64..=MAX_SIDE).contains(&height) {
             return Err(format!("{s}: each side is 64 to 16384 pixels"));
         }
+
         Ok(Self { width, height })
     }
 }

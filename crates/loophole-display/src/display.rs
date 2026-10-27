@@ -13,7 +13,6 @@ pub enum Source {
         buf: Dmabuf,
         key: Option<BufferKey>,
     },
-    // pixman x8r8g8b8: bytes B, G, R, X.
     Memory {
         width: u32,
         height: u32,
@@ -48,7 +47,6 @@ pub struct Display {
     pub console: ConsoleProxy<'static>,
     pub label: String,
     pub source: Option<Source>,
-    // GL origin: the first row is the bottom one.
     pub y0_top: bool,
     pub serial: u64,
     pub updates: u32,
@@ -57,7 +55,6 @@ pub struct Display {
 }
 
 impl Display {
-    // QEMU sends the console's current frame right away.
     pub async fn connect(stream: UnixStream) -> Result<(Self, Receiver<Event>)> {
         let conn = zbus::connection::Builder::async_io_unix_stream(stream)
             .p2p()
@@ -70,12 +67,14 @@ impl Display {
         let name = vm.name().await.unwrap_or_default();
 
         let mut graphic = None;
+
         for id in vm.console_ids().await? {
             let proxy = ConsoleProxy::builder(&conn)
                 .path(console_path(id))?
                 .cache_properties(zbus::proxy::CacheProperties::No)
                 .build()
                 .await?;
+
             if proxy.kind().await.unwrap_or_default() == "Graphic" {
                 let label = proxy
                     .label()
@@ -85,6 +84,7 @@ impl Display {
                 break;
             }
         }
+
         let (console, label) = graphic.context("the VM has no graphic console")?;
         let path = console.inner().path().to_owned();
         let keyboard = KeyboardProxy::builder(&conn)
@@ -108,10 +108,10 @@ impl Display {
             keyboard,
             mouse,
         };
+
         Ok((display, rx))
     }
 
-    // Resolves to false once QEMU has gone.
     pub fn alive(&self) -> impl Future<Output = bool> + 'static {
         let vm = self.vm.clone();
         async move { vm.name().await.is_ok() }
@@ -119,6 +119,7 @@ impl Display {
 
     pub fn event(&mut self, event: Event) -> Changed {
         let mut changed = Changed::default();
+
         match event {
             Event::Scanout(Frame::Dmabuf {
                 planes,
@@ -187,6 +188,7 @@ impl Display {
                     };
                     surface.copy_rect((x, y, w, h), &rows, stride);
                 }
+
                 self.updates += 1;
                 self.serial += 1;
                 changed.frame = true;
@@ -200,6 +202,7 @@ impl Display {
                 changed.cursor_at = Some((x, y));
             },
         }
+
         changed
     }
 }
@@ -217,9 +220,11 @@ impl Surface<'_> {
         let (x, y, w, h) = (clamp(rect.0), clamp(rect.1), clamp(rect.2), clamp(rect.3));
         let (stride, dst_stride) = (stride as usize, self.stride as usize);
         let fits = h == 0 || rows.len() >= (h - 1) * stride + w * 4;
+
         if !fits || x + w > self.width as usize || y + h > self.height as usize {
             return;
         }
+
         for r in 0..h {
             let from = r * stride;
             let to = (y + r) * dst_stride + x * 4;
