@@ -17,10 +17,12 @@ use crate::ui::ViewerWindow;
 use crate::unblock;
 
 mod buttons;
+mod clipboard;
 mod frame;
 mod input;
 
 use self::buttons::Buttons;
+use self::clipboard::Link;
 use self::input::{Input, coalesce};
 
 #[derive(Clone, Default)]
@@ -44,6 +46,7 @@ pub struct Screen {
     display: Option<Display>,
     tasks: Vec<slint::JoinHandle<()>>,
     input: Option<async_channel::Sender<Input>>,
+    clipboard: Option<Link>,
     on_gone: Option<Rc<dyn Fn()>>,
 
     gl: Option<Gl>,
@@ -110,6 +113,7 @@ impl Screen {
                 display: None,
                 tasks: Vec::new(),
                 input: None,
+                clipboard: None,
                 on_gone: None,
                 gl: None,
                 gl_error: None,
@@ -242,7 +246,7 @@ impl Screen {
         }
     }
 
-    pub fn attach(this: &Rc<RefCell<Self>>, qmp: PathBuf) {
+    pub fn attach(this: &Rc<RefCell<Self>>, qmp: PathBuf, clipboard: Option<PathBuf>) {
         Self::detach(this);
         this.borrow().set_placeholder("Connecting…");
         let weak = Rc::downgrade(this);
@@ -250,6 +254,14 @@ impl Screen {
             let result = match unblock(move || qmp::attach_display(&qmp)).await {
                 Ok(stream) => Display::connect(stream).await,
                 Err(e) => Err(e),
+            };
+
+            let link = match clipboard {
+                Some(path) if result.is_ok() => unblock(move || Link::connect(&path))
+                    .await
+                    .inspect_err(|e| eprintln!("loophole: clipboard: {e}"))
+                    .ok(),
+                _ => None,
             };
 
             let Some(this) = weak.upgrade() else { return };
@@ -280,11 +292,16 @@ impl Screen {
 
                 s.display = Some(display);
                 s.input = Some(itx);
+                s.clipboard = link;
                 s.sent_size = None;
                 s.sent_refresh = None;
                 s.shown_key = None;
                 s.shown_memory = None;
                 s.last_abs = None;
+
+                if s.focused {
+                    s.push_clipboard();
+                }
             }
             Self::send_size(&this);
             Self::check(&this);
@@ -358,6 +375,7 @@ impl Screen {
 
         s.display = None;
         s.input = None;
+        s.clipboard = None;
         s.cursor = None;
         s.shown_memory = None;
         s.probe_timer.stop();
@@ -387,6 +405,12 @@ impl Screen {
     fn send(&self, i: Input) {
         if let Some(tx) = &self.input {
             let _ = tx.try_send(i);
+        }
+    }
+
+    fn push_clipboard(&self) {
+        if let Some(link) = &self.clipboard {
+            link.push_host();
         }
     }
 

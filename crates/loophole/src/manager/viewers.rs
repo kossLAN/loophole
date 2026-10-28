@@ -205,8 +205,13 @@ impl Manager {
         }
 
         for (screen, cfg) in attach {
+            let run = RunPaths::new(&cfg.name);
             screen.borrow_mut().set_options(screen_options(&cfg));
-            Screen::attach(&screen, RunPaths::new(&cfg.name).qmp());
+            Screen::attach(
+                &screen,
+                run.qmp(),
+                cfg.display.clipboard.then(|| run.clipboard()),
+            );
         }
     }
 }

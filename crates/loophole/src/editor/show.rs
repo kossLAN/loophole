@@ -53,6 +53,7 @@ impl Editor {
                 .map(|r| text(r.to_string()))
                 .unwrap_or_default(),
             capture: index(cfg.display.capture.index()),
+            clipboard: cfg.display.clipboard,
             tpm: cfg.machine.tpm,
             machine_options: text(cfg.machine.options.as_str()),
             extra_args: text(cfg.machine.extra_args.join(" ")),

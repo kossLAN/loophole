@@ -28,6 +28,15 @@ export component DisplayTab inherits CardFlow {
                 mono: true;
             }
         }
+        FormRow {
+            label: "Clipboard";
+            icon: Icons.clipboard;
+            hint: "Shares text with the guest's loophole agent";
+            Switch {
+                checked <=> Edit.vm.clipboard;
+                label: "Clipboard";
+            }
+        }
     }
     Card {
         title: "Pointer";

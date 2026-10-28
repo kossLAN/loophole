@@ -400,7 +400,7 @@ impl Default for Boot {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Display {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -408,6 +408,18 @@ pub struct Display {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub refresh_hz: Option<u32>,
     pub capture: Capture,
+    pub clipboard: bool,
+}
+
+impl Default for Display {
+    fn default() -> Self {
+        Self {
+            resolution: None,
+            refresh_hz: None,
+            capture: Capture::default(),
+            clipboard: true,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

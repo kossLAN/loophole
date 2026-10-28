@@ -65,6 +65,7 @@ impl Editor {
         cfg.boot.menu = vm.boot_menu;
         cfg.boot.menu_timeout_ms = count(vm.boot_timeout);
         cfg.display.capture = Capture::from_index(count(vm.capture) as usize);
+        cfg.display.clipboard = vm.clipboard;
         cfg.display.resolution = optional(&vm.resolution).and_then(|r| {
             r.parse::<Resolution>()
                 .map_err(|e| issues.push(Issue::error(Section::Display, e)))

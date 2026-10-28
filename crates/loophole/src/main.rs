@@ -129,8 +129,8 @@ pub fn viewer_window() -> Result<ViewerWindow> {
 }
 
 fn view(args: ViewArgs) -> Result<()> {
-    let (qmp, display) = match (args.qmp, args.name) {
-        (Some(qmp), _) => (qmp, config::Display::default()),
+    let (qmp, clipboard, display) = match (args.qmp, args.name) {
+        (Some(qmp), _) => (qmp, None, config::Display::default()),
         (None, Some(name)) => {
             let cfg = config::load(&name)?;
 
@@ -138,7 +138,9 @@ fn view(args: ViewArgs) -> Result<()> {
                 bail!("{name} is not running");
             }
 
-            (RunPaths::new(&name).qmp(), cfg.display)
+            let run = RunPaths::new(&name);
+            let clipboard = cfg.display.clipboard.then(|| run.clipboard());
+            (run.qmp(), clipboard, cfg.display)
         },
         (None, None) => unreachable!("clap requires one"),
     };
@@ -160,7 +162,7 @@ fn view(args: ViewArgs) -> Result<()> {
     screen.borrow_mut().set_on_gone(|| {
         let _ = slint::quit_event_loop();
     });
-    Screen::attach(&screen, qmp);
+    Screen::attach(&screen, qmp, clipboard);
 
     if args.fullscreen {
         ui.invoke_toggle_fullscreen();

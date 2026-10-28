@@ -355,6 +355,7 @@ pub fn start(cfg: &VmConfig, tools: &Tools) -> Result<Child> {
     for stale in [
         run.control(),
         run.qmp(),
+        run.clipboard(),
         run.tpm(),
         run.tpm_pid(),
         run.pid(),

@@ -362,7 +362,9 @@ impl Screen {
             WindowEvent::Focused(on) => {
                 self.focused = *on;
 
-                if !on {
+                if *on {
+                    self.push_clipboard();
+                } else {
                     self.release_all();
                     self.capture_requested = false;
                 }

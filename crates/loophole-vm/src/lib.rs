@@ -1,4 +1,5 @@
 pub mod argv;
+pub mod clipboard;
 pub mod config;
 pub mod dirs;
 pub mod driver_disc;

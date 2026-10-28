@@ -49,6 +49,10 @@ impl RunPaths {
     pub fn serial(&self) -> PathBuf {
         self.dir.join("serial.log")
     }
+
+    pub fn clipboard(&self) -> PathBuf {
+        self.dir.join("clipboard.sock")
+    }
 }
 
 pub const INSTALL_DRIVE: &str = "install";
@@ -375,6 +379,15 @@ pub fn argv(
     );
     a.pair("-qmp", option("unix:", &run.qmp(), ",server=on,wait=off"));
     a.pair("-serial", option("file:", &run.serial(), ""));
+    a.pair(
+        "-chardev",
+        option(
+            "socket,id=clipboard,path=",
+            &run.clipboard(),
+            ",server=on,wait=off",
+        ),
+    );
+    a.pair("-device", "isa-serial,chardev=clipboard,index=1");
     a.pair("-monitor", "none");
     a.pair("-pidfile", run.pid());
 

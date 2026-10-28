@@ -9,6 +9,7 @@ license = "MIT"
 
 [dependencies]
 anyhow = "1"
+arboard = { version = "3.6", default-features = false, features = ["wayland-data-control"] }
 ashpd = { version = "0.13", default-features = false, features = ["async-io", "file_chooser", "settings"] }
 async-channel = "2"
 clap = { version = "4", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
